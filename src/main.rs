@@ -1,7 +1,6 @@
 use std::io::Error;
 use std::io::{self, Read};
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::process::exit;
 
 pub struct StdinRawMode {
     stdin: io::Stdin,
@@ -55,7 +54,15 @@ fn main() {
                 if b.unwrap() == b'q' {
                     break;
                 }
-                print!("{}", b.unwrap());
+                let b = b.unwrap();
+                let c = b as char;
+                if c.is_ascii_control() {
+                    // 制御文字かどうかを判定
+                    // 制御文字は画面に出力したくない印刷不可能な文字
+                    println!("{}", b);
+                } else {
+                    println!("{} ('{}')", b, c);
+                }
             }
             _ => break,
         };
