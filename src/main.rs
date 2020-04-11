@@ -23,7 +23,7 @@ impl StdinRawMode {
         let mut termios = Termios::from_fd(self.fd).unwrap();
 
         termios.c_iflag &= !(IXON);
-        termios.c_lflag &= !(ECHO | ICANON | ISIG);
+        termios.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
 
         tcsetattr(self.fd, TCSAFLUSH, &termios).unwrap();
     }
