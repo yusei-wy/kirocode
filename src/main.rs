@@ -23,6 +23,7 @@ impl StdinRawMode {
         let mut termios = Termios::from_fd(self.fd).unwrap();
 
         termios.c_iflag &= !(ICRNL | IXON);
+        termios.c_oflag &= !(OPOST);
         termios.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
 
         tcsetattr(self.fd, TCSAFLUSH, &termios).unwrap();
@@ -60,9 +61,9 @@ fn main() {
                 if c.is_ascii_control() {
                     // 制御文字かどうかを判定
                     // 制御文字は画面に出力したくない印刷不可能な文字
-                    println!("{}", b);
+                    print!("{}\r\n", b);
                 } else {
-                    println!("{} ('{}')", b, c);
+                    print!("{} ('{}')\r\n", b, c);
                 }
             }
             _ => break,
