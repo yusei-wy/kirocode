@@ -1,50 +1,5 @@
-use std::io::Error;
-use std::io::{self, Read};
-use std::os::unix::io::{AsRawFd, RawFd};
-
-pub struct StdinRawMode {
-    stdin: io::Stdin,
-    fd: RawFd,
-    orig: termios::Termios,
-}
-
-impl StdinRawMode {
-    pub fn new() -> Result<StdinRawMode, Error> {
-        let stdin = io::stdin();
-        let fd = stdin.as_raw_fd();
-        let orig = termios::Termios::from_fd(fd)?;
-
-        Ok(StdinRawMode { stdin, fd, orig })
-    }
-
-    pub fn enable_raw_mode(&self) {
-        use termios::*;
-
-        let mut termios = Termios::from_fd(self.fd).unwrap();
-
-        termios.c_iflag &= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-        termios.c_oflag &= !(OPOST);
-        termios.c_cflag &= !(CS8);
-        termios.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
-        termios.c_cc[VMIN] = 0;
-        termios.c_cc[VTIME] = 1;
-
-        tcsetattr(self.fd, TCSAFLUSH, &termios).unwrap();
-    }
-
-    pub fn disable_raw_mode(&self) {
-        termios::tcsetattr(self.fd, termios::TCSAFLUSH, &self.orig).unwrap();
-    }
-
-    pub fn read_byte(&mut self) -> Result<Option<u8>, Error> {
-        let mut one_byte: [u8; 1] = [0];
-        Ok(if self.stdin.read(&mut one_byte)? == 0 {
-            None
-        } else {
-            Some(one_byte[0])
-        })
-    }
-}
+use kirocode::StdinRawMode;
+use std::io::{stdout, Write};
 
 fn main() {
     let mut input = match StdinRawMode::new() {
@@ -53,6 +8,8 @@ fn main() {
     };
     input.enable_raw_mode();
 
+    let out = stdout();
+    let mut out = out.lock();
     loop {
         match input.read_byte() {
             Ok(b) => {
@@ -64,14 +21,12 @@ fn main() {
                 if c.is_ascii_control() {
                     // 制御文字かどうかを判定
                     // 制御文字は画面に出力したくない印刷不可能な文字
-                    print!("{}\r\n", b);
+                    write!(out, "{}\r\n", b).unwrap();
                 } else {
-                    print!("{} ('{}')\r\n", b, c);
+                    write!(out, "{} ('{}')\r\n", b, c).unwrap();
                 }
             }
             _ => break,
         };
     }
-
-    input.disable_raw_mode();
 }

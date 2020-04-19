@@ -1,5 +1,5 @@
 [package]
-name = "kiro-rust"
+name = "kirocode"
 version = "0.0.1"
 authors = ["yusei-wy <yusei.kasa@gmail.com>"]
 edition = "2018"
