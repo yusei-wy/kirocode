@@ -4,6 +4,8 @@ use std::{fmt, io};
 #[derive(Debug)]
 pub enum Error {
     IoError(io::Error),
+    // TODO: Temporary. Remove later.
+    UnexpectedError,
 }
 
 impl fmt::Display for Error {
@@ -11,6 +13,7 @@ impl fmt::Display for Error {
         use Error::*;
         match self {
             IoError(err) => write!(f, "{}", err),
+            UnexpectedError => write!(f, "{}", "unexpected error"),
         }
     }
 }

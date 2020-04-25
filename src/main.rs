@@ -1,4 +1,4 @@
-use kirocode::StdinRawMode;
+use kirocode::{StdinRawMode, KeySeq};
 use std::io::{stdout, Write};
 
 fn main() {
@@ -11,22 +11,21 @@ fn main() {
     let out = stdout();
     let mut out = out.lock();
     loop {
-        match input.read_byte() {
-            Ok(b) => {
-                if b.unwrap() == b'q' {
-                    break;
-                }
-                let b = b.unwrap();
-                let c = b as char;
-                if c.is_ascii_control() {
-                    // 制御文字かどうかを判定
-                    // 制御文字は画面に出力したくない印刷不可能な文字
-                    write!(out, "{}\r\n", b).unwrap();
-                } else {
-                    write!(out, "{} ('{}')\r\n", b, c).unwrap();
-                }
+        if let Some(b) = input.read_byte().unwrap() {
+            let input_seq = input.decode(b).unwrap();
+            
+            if input_seq.ctrl && input_seq.key == KeySeq::Key(b'q') {
+                break;
             }
-            _ => break,
-        };
+            
+            let c = b as char;
+            if input_seq.ctrl {
+                // 制御文字かどうかを判定
+                // 制御文字は画面に出力したくない印刷不可能な文字
+                write!(out, "{}\r\n", b).unwrap();
+            } else {
+                write!(out, "{} ('{}')\r\n", b, c).unwrap();
+            }
+        }
     }
 }
