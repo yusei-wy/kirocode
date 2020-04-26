@@ -1,31 +1,35 @@
-use kirocode::{StdinRawMode, KeySeq};
-use std::io::{stdout, Write};
+use kirocode::{InputSeq, KeySeq, Result, StdinRawMode};
+use std::io::{stdout, StdoutLock};
+
+fn editor_process_keypress(out: &mut StdoutLock, input: &mut StdinRawMode) -> bool {
+    let input_seq = editor_read_key(input).unwrap();
+
+    if input_seq.ctrl && input_seq.key == KeySeq::Key(b'q') {
+        // exit すると StdRawMode の Drop が呼ばれない
+        return false;
+    }
+
+    true
+}
+
+fn editor_read_key(input: &mut StdinRawMode) -> Result<InputSeq> {
+    let b = input.read_byte().unwrap();
+    input.decode(b.unwrap())
+}
 
 fn main() {
     let mut input = match StdinRawMode::new() {
         Ok(i) => i,
         Err(err) => panic!(err),
     };
+
     input.enable_raw_mode();
 
     let out = stdout();
     let mut out = out.lock();
     loop {
-        if let Some(b) = input.read_byte().unwrap() {
-            let input_seq = input.decode(b).unwrap();
-            
-            if input_seq.ctrl && input_seq.key == KeySeq::Key(b'q') {
-                break;
-            }
-            
-            let c = b as char;
-            if input_seq.ctrl {
-                // 制御文字かどうかを判定
-                // 制御文字は画面に出力したくない印刷不可能な文字
-                write!(out, "{}\r\n", b).unwrap();
-            } else {
-                write!(out, "{} ('{}')\r\n", b, c).unwrap();
-            }
+        if !editor_process_keypress(&mut out, &mut input) {
+            break;
         }
     }
 }

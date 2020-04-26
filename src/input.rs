@@ -48,7 +48,7 @@ impl StdinRawMode {
         match b {
             // C0 control characters
             0x00..=0x1f => match b {
-                // 0x00~0x1f keys area ascii keys with cntrl. Ctrl mod masks key with 0b11111.
+                // 0x00~0x1f keys area ascii keys with ctrl. Ctrl mod masks key with 0b11111.
                 // Here unmask it with 0b1100000. It only works with 0x61~0x7f.
                 _ => Ok(InputSeq::ctrl(Key(b | 0b0110_0000))),
             },
