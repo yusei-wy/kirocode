@@ -1,5 +1,5 @@
 use kirocode::{InputSeq, KeySeq, Result, StdinRawMode};
-use std::io::{stdout, StdoutLock};
+use std::io::{stdout, StdoutLock, Write};
 
 fn editor_process_keypress(out: &mut StdoutLock, input: &mut StdinRawMode) -> bool {
     let input_seq = editor_read_key(input).unwrap();
@@ -17,6 +17,10 @@ fn editor_read_key(input: &mut StdinRawMode) -> Result<InputSeq> {
     input.decode(b.unwrap())
 }
 
+fn editor_refresh_screen(out: &mut StdoutLock) {
+    write!(out, "{}", "\x1b[2J").unwrap();
+}
+
 fn main() {
     let mut input = match StdinRawMode::new() {
         Ok(i) => i,
@@ -28,6 +32,7 @@ fn main() {
     let out = stdout();
     let mut out = out.lock();
     loop {
+        editor_refresh_screen(&mut out);
         if !editor_process_keypress(&mut out, &mut input) {
             break;
         }
