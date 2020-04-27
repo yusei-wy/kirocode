@@ -18,8 +18,8 @@ fn editor_read_key(input: &mut StdinRawMode) -> Result<InputSeq> {
 }
 
 fn editor_refresh_screen(out: &mut BufWriter<io::StdoutLock>) {
-    write!(out, "{}", "\x1b[2J").unwrap();
-    write!(out, "{}", "\x1b[H").unwrap();
+    write!(out, "\x1b[2J").unwrap();
+    write!(out, "\x1b[H").unwrap();
 }
 
 fn main() {
@@ -32,9 +32,15 @@ fn main() {
 
     let out = stdout();
     let mut out = BufWriter::new(out.lock());
+
+    editor_refresh_screen(&mut out);
+    out.flush().unwrap();
+
     loop {
         editor_refresh_screen(&mut out);
         if !editor_process_keypress(&mut out, &mut input) {
+            write!(out, "\x1b[2J").unwrap();
+            write!(out, "\x1b[H").unwrap();
             break;
         }
     }
