@@ -17,8 +17,18 @@ fn editor_read_key(input: &mut StdinRawMode) -> Result<InputSeq> {
     input.decode(b.unwrap())
 }
 
+fn editor_draw_rows(out: &mut BufWriter<io::StdoutLock>) {
+    for _ in 0..24 {
+        write!(out, "~\r\n").unwrap();
+    }
+}
+
 fn editor_refresh_screen(out: &mut BufWriter<io::StdoutLock>) {
     write!(out, "\x1b[2J").unwrap();
+    write!(out, "\x1b[H").unwrap();
+
+    editor_draw_rows(out);
+
     write!(out, "\x1b[H").unwrap();
 }
 
