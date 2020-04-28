@@ -17,17 +17,21 @@ fn editor_read_key(input: &mut StdinRawMode) -> Result<InputSeq> {
     input.decode(b.unwrap())
 }
 
-fn editor_draw_rows(out: &mut BufWriter<io::StdoutLock>) {
-    for _ in 0..24 {
+fn get_window_size() -> (usize, usize) {
+    term_size::dimensions_stdout().unwrap()
+}
+
+fn editor_draw_rows(out: &mut BufWriter<io::StdoutLock>, w: usize, h: usize) {
+    for _ in 0..w {
         write!(out, "~\r\n").unwrap();
     }
 }
 
-fn editor_refresh_screen(out: &mut BufWriter<io::StdoutLock>) {
+fn editor_refresh_screen(out: &mut BufWriter<io::StdoutLock>, w: usize, h: usize) {
     write!(out, "\x1b[2J").unwrap();
     write!(out, "\x1b[H").unwrap();
 
-    editor_draw_rows(out);
+    editor_draw_rows(out, w, h);
 
     write!(out, "\x1b[H").unwrap();
 }
@@ -39,15 +43,16 @@ fn main() {
     };
 
     input.enable_raw_mode();
+    let (w, h) = get_window_size();
 
     let out = stdout();
     let mut out = BufWriter::new(out.lock());
 
-    editor_refresh_screen(&mut out);
+    editor_refresh_screen(&mut out, w, h);
     out.flush().unwrap();
 
     loop {
-        editor_refresh_screen(&mut out);
+        editor_refresh_screen(&mut out, w, h);
         if !editor_process_keypress(&mut out, &mut input) {
             write!(out, "\x1b[2J").unwrap();
             write!(out, "\x1b[H").unwrap();
