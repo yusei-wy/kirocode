@@ -6,6 +6,7 @@ pub enum Error {
     IoError(io::Error),
     // TODO: Temporary. Remove later.
     UnexpectedError,
+    UnknownWindowSize,
 }
 
 impl fmt::Display for Error {
@@ -13,7 +14,8 @@ impl fmt::Display for Error {
         use Error::*;
         match self {
             IoError(err) => write!(f, "{}", err),
-            UnexpectedError => write!(f, "{}", "unexpected error"),
+            UnknownWindowSize => write!(f, "Cloud not detect terminal window size"),
+            UnexpectedError => write!(f, "Unexpected error"),
         }
     }
 }

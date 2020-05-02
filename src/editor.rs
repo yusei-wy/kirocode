@@ -1,49 +1,65 @@
-use crate::input::{InputSeq, KeySeq, StdinRawMode};
+use crate::error::Result;
+use crate::input::{InputSeq, KeySeq};
 use crate::screen::Screen;
-use std::io::{self, BufWriter, Write};
+use std::io::Write;
 
-pub struct Editor<'a> {
-    pub input: StdinRawMode,
-    pub out: BufWriter<io::StdoutLock<'a>>,
-    pub screen: Screen,
+pub struct Editor<I: Iterator<Item = Result<InputSeq>>, W: Write> {
+    input: I,
+    screen: Screen<W>,
 }
 
-impl<'a> Editor<'a> {
-    pub fn new(input: StdinRawMode, out: BufWriter<io::StdoutLock<'a>>) -> Editor {
-        Editor {
-            input,
-            out,
-            screen: Screen::new(None),
-        }
+impl<I, W> Editor<I, W>
+where
+    I: Iterator<Item = Result<InputSeq>>,
+    W: Write,
+{
+    pub fn new(
+        mut input: I,
+        output: W,
+        window_size: Option<(usize, usize)>,
+    ) -> Result<Editor<I, W>> {
+        let screen = Screen::new(window_size, &mut input, output)?;
+
+        Ok(Editor { input, screen })
     }
 
-    pub fn edit(&mut self) {
-        self.input.enable_raw_mode();
+    // WHY: mut が変数の前に来る？
+    pub fn open(
+        mut input: I,
+        output: W,
+        window_size: Option<(usize, usize)>,
+    ) -> Result<Editor<I, W>> {
+        Self::new(input, output, window_size)
+    }
+
+    pub fn edit(&mut self) -> Result<()> {
         self.refresh_screen();
-        self.out.flush().unwrap();
+        self.screen.flush();
 
         loop {
             self.refresh_screen();
             if !self.process_keypress() {
-                write!(self.out, "\x1b[2J").unwrap();
-                write!(self.out, "\x1b[H").unwrap();
+                self.screen.render("\x1b[2J");
+                self.screen.render("\x1b[H");
                 break;
             }
         }
+
+        Ok(())
     }
 
     fn refresh_screen(&mut self) {
-        write!(self.out, "\x1b[2J").unwrap();
-        write!(self.out, "\x1b[H").unwrap();
+        self.screen.render("\x1b[2J");
+        self.screen.render("\x1b[H");
 
         self.draw_rows();
 
-        write!(self.out, "\x1b[H").unwrap();
+        self.screen.render("\x1b[H");
     }
 
     fn draw_rows(&mut self) {
-        for _ in 0..self.screen.rows {
-            write!(self.out, "~\r\n").unwrap();
+        for _ in 0..self.screen.rows() {
+            self.screen.render("~\r\n");
         }
     }
 
@@ -58,7 +74,6 @@ impl<'a> Editor<'a> {
     }
 
     fn read_key(&mut self) -> InputSeq {
-        let b = self.input.read_byte().unwrap();
-        self.input.decode(b.unwrap()).unwrap()
+        self.input.next().unwrap().unwrap()
     }
 }
