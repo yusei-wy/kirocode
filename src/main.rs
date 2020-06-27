@@ -1,16 +1,22 @@
-use kirocode::{self, Editor, StdinRawMode};
-use std::io;
-use std::process::exit;
+use kirocode::Result;
 
-fn edit() -> kirocode::Result<()> {
-    // TODO: Read input from stdin before start
-    let input = StdinRawMode::new()?.input_keys();
-    Editor::new(input, io::stdout(), None)?.edit()
-}
+use std::io::{self, Read};
 
 fn main() {
-    if let Err(err) = edit() {
-        eprintln!("Error: {}", err);
-        exit(1);
+    let mut stdin = io::stdin();
+    loop {
+        match read_byte(&mut stdin) {
+            Ok(ob) => {},
+            Err(e) => print!("{}", e),
+        }
     }
+}
+
+fn read_byte(stdin: &mut io::Stdin) -> Result<Option<u8>> {
+    let mut one_byte: [u8; 1] = [0];
+    Ok(if stdin.read(&mut one_byte)? == 0 {
+        None
+    } else {
+        Some(one_byte[0])
+    })
 }

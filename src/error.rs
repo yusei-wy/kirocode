@@ -1,12 +1,9 @@
-use std::{fmt, io};
+use std::io;
+use std::fmt;
+use std::convert::From;
 
-// Deriving Debug is necesary to use .expect() method
-#[derive(Debug)]
 pub enum Error {
     IoError(io::Error),
-    // TODO: Temporary. Remove later.
-    UnexpectedError,
-    UnknownWindowSize,
 }
 
 impl fmt::Display for Error {
@@ -14,8 +11,6 @@ impl fmt::Display for Error {
         use Error::*;
         match self {
             IoError(err) => write!(f, "{}", err),
-            UnknownWindowSize => write!(f, "Cloud not detect terminal window size"),
-            UnexpectedError => write!(f, "Unexpected error"),
         }
     }
 }
@@ -26,5 +21,4 @@ impl From<io::Error> for Error {
     }
 }
 
-// Aliaces result
 pub type Result<T> = std::result::Result<T, Error>;
