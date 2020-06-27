@@ -6,7 +6,14 @@ fn main() {
     let mut stdin = io::stdin();
     loop {
         match read_byte(&mut stdin) {
-            Ok(ob) => {},
+            Ok(ob) => {
+                if let Some(b) = ob {
+                    let c = b as char;
+                    if c == 'q' {
+                        break;
+                    }
+                }
+            },
             Err(e) => print!("{}", e),
         }
     }
