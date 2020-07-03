@@ -17,6 +17,8 @@ impl StdinRawMode {
         // C/C++ でビットの NOT 演算子は '~'
         termios.c_lflag &= !(ECHO);
 
+        tcsetattr(fd, TCSAFLUSH, &termios)?;
+
         Ok(Self { stdin })
     }
 
