@@ -51,6 +51,12 @@ fn main() {
                         if c == 'q' {
                             break;
                         }
+
+                        if isctrl(b) {
+                            print!("{}\n", c);
+                        } else {
+                            print!("{} ({})\n", b, c)
+                        }
                     }
                 }
                 Err(e) => {
@@ -61,4 +67,23 @@ fn main() {
         },
         Err(err) => eprintln!("{}", err),
     };
+}
+
+fn isctrl(b: u8) -> bool {
+    return b <= 31 || b == 127;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+    #[test]
+    fn test_is_ctrl() {
+        assert_eq!(isctrl(32), false);
+        assert_eq!(isctrl(126), false);
+        assert_eq!(isctrl(128), false);
+        assert_eq!(isctrl(0), true);
+        assert_eq!(isctrl(30), true);
+        assert_eq!(isctrl(31), true);
+        assert_eq!(isctrl(127), true);
+    }
 }
