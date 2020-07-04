@@ -17,7 +17,7 @@ impl StdinRawMode {
         let org = termios;
 
         // C/C++ でビットの NOT 演算子は '~'
-        termios.c_lflag &= !(ECHO);
+        termios.c_lflag &= !(ECHO | ICANON);
 
         tcsetattr(fd, TCSAFLUSH, &termios)?;
 
