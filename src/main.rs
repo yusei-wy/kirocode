@@ -5,6 +5,7 @@ use std::os::unix::io::AsRawFd;
 
 struct StdinRawMode {
     stdin: io::Stdin,
+    org: termios::Termios,
 }
 
 impl StdinRawMode {
@@ -13,13 +14,14 @@ impl StdinRawMode {
         let stdin = io::stdin();
         let fd = stdin.as_raw_fd();
         let mut termios = Termios::from_fd(fd)?;
+        let org = termios;
 
         // C/C++ でビットの NOT 演算子は '~'
         termios.c_lflag &= !(ECHO);
 
         tcsetattr(fd, TCSAFLUSH, &termios)?;
 
-        Ok(Self { stdin })
+        Ok(Self { stdin, org })
     }
 
     fn read_byte(&mut self) -> Result<Option<u8>> {
@@ -29,6 +31,13 @@ impl StdinRawMode {
         } else {
             Some(one_byte[0])
         })
+    }
+}
+
+impl Drop for StdinRawMode {
+    fn drop(&mut self) {
+        use termios::*;
+        tcsetattr(self.stdin.as_raw_fd(), termios::TCSAFLUSH, &self.org).unwrap();
     }
 }
 
@@ -44,7 +53,10 @@ fn main() {
                         }
                     }
                 }
-                Err(e) => print!("{}", e),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    break;
+                }
             }
         },
         Err(err) => eprintln!("{}", err),
