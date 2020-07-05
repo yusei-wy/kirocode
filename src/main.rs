@@ -18,6 +18,7 @@ impl StdinRawMode {
 
         // C/C++ でビットの NOT 演算子は '~'
         termios.c_iflag &= !(ICRNL | IXON);
+        termios.c_oflag &= !(OPOST);
         termios.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
 
         tcsetattr(fd, TCSAFLUSH, &termios)?;
@@ -54,9 +55,9 @@ fn main() {
                         }
 
                         if isctrl(b) {
-                            print!("{}\n", b);
+                            print!("{}\r\n", b);
                         } else {
-                            print!("{} ({})\n", b, c)
+                            print!("{} ({})\r\n", b, c)
                         }
                     }
                 }
