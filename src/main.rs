@@ -53,7 +53,7 @@ fn main() {
                         }
 
                         if isctrl(b) {
-                            print!("{}\n", c);
+                            print!("{}\n", b);
                         } else {
                             print!("{} ({})\n", b, c)
                         }
