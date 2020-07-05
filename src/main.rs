@@ -21,6 +21,8 @@ impl StdinRawMode {
         termios.c_oflag &= !(OPOST);
         termios.c_cflag &= !(CS8);
         termios.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
+        termios.c_cc[VMIN] = 0;
+        termios.c_cc[VTIME] = 1;
 
         tcsetattr(fd, TCSAFLUSH, &termios)?;
 
@@ -47,13 +49,11 @@ impl Drop for StdinRawMode {
 fn main() {
     match StdinRawMode::new() {
         Ok(mut input) => loop {
+            let mut c = '\0';
             match input.read_byte() {
                 Ok(ob) => {
                     if let Some(b) = ob {
-                        let c = b as char;
-                        if c == 'q' {
-                            break;
-                        }
+                        c = b as char;
 
                         if isctrl(b) {
                             print!("{}\r\n", b);
@@ -66,6 +66,10 @@ fn main() {
                     eprintln!("{}", e);
                     break;
                 }
+            }
+
+            if c == 'q' {
+                break;
             }
         },
         Err(err) => eprintln!("{}", err),
