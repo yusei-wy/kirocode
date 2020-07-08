@@ -49,13 +49,13 @@ impl Drop for StdinRawMode {
 fn main() {
     match StdinRawMode::new() {
         Ok(mut input) => loop {
-            let mut c = '\0';
+            let mut b: u8 = 0;
             match input.read_byte() {
                 Ok(ob) => {
-                    if let Some(b) = ob {
-                        c = b as char;
-
-                        if isctrl(b) {
+                    if let Some(_b) = ob {
+                        b = _b;
+                        let c = b as char;
+                        if is_ctrl(b) {
                             print!("{}\r\n", b);
                         } else {
                             print!("{} ({})\r\n", b, c)
@@ -68,7 +68,7 @@ fn main() {
                 }
             }
 
-            if c == 'q' {
+            if b == ctrl_key('q') {
                 break;
             }
         },
@@ -76,21 +76,34 @@ fn main() {
     };
 }
 
-fn isctrl(b: u8) -> bool {
-    return b <= 31 || b == 127;
+fn is_ctrl(b: u8) -> bool {
+    match b {
+        0x00..=0x1f | 0x7f => true,
+        _ => false,
+    }
+}
+
+fn ctrl_key(c: char) -> u8 {
+    c as u8 & 0x1f
 }
 
 #[cfg(test)]
 mod tests {
     use crate::*;
+
     #[test]
     fn test_is_ctrl() {
-        assert_eq!(isctrl(32), false);
-        assert_eq!(isctrl(126), false);
-        assert_eq!(isctrl(128), false);
-        assert_eq!(isctrl(0), true);
-        assert_eq!(isctrl(30), true);
-        assert_eq!(isctrl(31), true);
-        assert_eq!(isctrl(127), true);
+        assert!(!is_ctrl(32));
+        assert!(!is_ctrl(126));
+        assert!(!is_ctrl(128));
+        assert!(is_ctrl(0));
+        assert!(is_ctrl(30));
+        assert!(is_ctrl(31));
+        assert!(is_ctrl(127));
+    }
+
+    #[test]
+    fn test_ctrl_key() {
+        assert_eq!(ctrl_key('q'), 17);
     }
 }
