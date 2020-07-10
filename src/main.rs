@@ -1,4 +1,4 @@
-use kirocode::Result;
+use kirocode::{Error, Result};
 
 use std::io::{self, Read};
 use std::os::unix::io::AsRawFd;
@@ -49,31 +49,42 @@ impl Drop for StdinRawMode {
 fn main() {
     match StdinRawMode::new() {
         Ok(mut input) => loop {
-            let mut b: u8 = 0;
-            match input.read_byte() {
-                Ok(ob) => {
-                    if let Some(_b) = ob {
-                        b = _b;
-                        let c = b as char;
-                        if is_ctrl(b) {
-                            print!("{}\r\n", b);
-                        } else {
-                            print!("{} ({})\r\n", b, c)
-                        }
+            match editor_process_keypress(&mut input) {
+                Ok(ok) => {
+                    if !ok {
+                        break;
                     }
                 }
-                Err(e) => {
-                    eprintln!("{}", e);
-                    break;
-                }
-            }
-
-            if b == ctrl_key('q') {
-                break;
+                Err(err) => eprintln!("{}", err),
             }
         },
         Err(err) => eprintln!("{}", err),
     };
+}
+
+fn editor_process_keypress(input: &mut StdinRawMode) -> Result<bool> {
+    let b = editor_read_key(input)?;
+
+    let c = b as char;
+    if is_ctrl(b) {
+        print!("{}\r\n", b);
+    } else {
+        print!("{} ({})\r\n", b, c)
+    }
+
+    if b == ctrl_key('q') {
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+fn editor_read_key(input: &mut StdinRawMode) -> Result<u8> {
+    let ob = input.read_byte()?;
+    match ob {
+        Some(b) => Ok(b),
+        None => Err(Error::InputReadByteError),
+    }
 }
 
 fn is_ctrl(b: u8) -> bool {

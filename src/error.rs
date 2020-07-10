@@ -1,9 +1,10 @@
-use std::io;
-use std::fmt;
 use std::convert::From;
+use std::fmt;
+use std::io;
 
 pub enum Error {
     IoError(io::Error),
+    InputReadByteError,
 }
 
 impl fmt::Display for Error {
@@ -11,6 +12,7 @@ impl fmt::Display for Error {
         use Error::*;
         match self {
             IoError(err) => write!(f, "{}", err),
+            InputReadByteError => write!(f, "input read byte error"),
         }
     }
 }
