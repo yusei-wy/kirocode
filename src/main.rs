@@ -1,6 +1,6 @@
 use kirocode::{Error, Result};
 
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
 
 struct StdinRawMode {
@@ -38,7 +38,6 @@ impl StdinRawMode {
         })
     }
 }
-
 impl Drop for StdinRawMode {
     fn drop(&mut self) {
         use termios::*;
@@ -47,9 +46,16 @@ impl Drop for StdinRawMode {
 }
 
 fn main() {
+    let output = io::stdout();
+    let mut output = output.lock();
+
+    editor_refresh_screen(&mut output);
+    output.flush().unwrap();
+
     match StdinRawMode::new() {
         Ok(mut input) => loop {
-            match editor_process_keypress(&mut input) {
+            editor_refresh_screen(&mut output);
+            match editor_process_keypress(&mut input, &mut output) {
                 Ok(ok) => {
                     if !ok {
                         break;
@@ -57,19 +63,24 @@ fn main() {
                 }
                 Err(err) => eprintln!("{}", err),
             }
+            output.flush().unwrap();
         },
         Err(err) => eprintln!("{}", err),
     };
 }
 
-fn editor_process_keypress(input: &mut StdinRawMode) -> Result<bool> {
+fn editor_refresh_screen(output: &mut io::StdoutLock) {
+    write!(output, "\x1b[2J").unwrap();
+}
+
+fn editor_process_keypress(input: &mut StdinRawMode, output: &mut io::StdoutLock) -> Result<bool> {
     let b = editor_read_key(input)?;
 
     let c = b as char;
     if is_ctrl(b) {
-        print!("{}\r\n", b);
+        write!(output, "{}\r\n", b);
     } else {
-        print!("{} ({})\r\n", b, c)
+        write!(output, "{} ({})\r\n", b, c);
     }
 
     if b == ctrl_key('q') {
