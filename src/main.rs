@@ -71,6 +71,7 @@ fn main() {
 
 fn editor_refresh_screen(output: &mut io::StdoutLock) {
     write!(output, "\x1b[2J").unwrap();
+    write!(output, "\x1b[12;40H").unwrap();
 }
 
 fn editor_process_keypress(input: &mut StdinRawMode, output: &mut io::StdoutLock) -> Result<bool> {
