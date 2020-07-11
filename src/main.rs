@@ -58,15 +58,22 @@ fn main() {
             match editor_process_keypress(&mut input, &mut output) {
                 Ok(ok) => {
                     if !ok {
+                        editor_refresh_screen(&mut output);
                         break;
                     }
                 }
-                Err(err) => eprintln!("{}", err),
+                Err(err) => die(err, &mut output),
             }
             output.flush().unwrap();
         },
-        Err(err) => eprintln!("{}", err),
+        Err(err) => die(err, &mut output),
     };
+}
+
+fn die(err: Error, output: &mut io::StdoutLock) {
+    write!(output, "\x1b[2J").unwrap();
+    write!(output, "\x1b[H").unwrap();
+    eprintln!("{}", err);
 }
 
 fn editor_refresh_screen(output: &mut io::StdoutLock) {
