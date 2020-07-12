@@ -58,13 +58,13 @@ fn main() {
             match editor_process_keypress(&mut input, &mut output) {
                 Ok(ok) => {
                     if !ok {
-                        editor_refresh_screen(&mut output);
+                        write!(&mut output, "\x1b[2J").unwrap();
+                        write!(&mut output, "\x1b[H").unwrap();
                         break;
                     }
                 }
                 Err(err) => die(err, &mut output),
             }
-            output.flush().unwrap();
         },
         Err(err) => die(err, &mut output),
     };
@@ -79,6 +79,18 @@ fn die(err: Error, output: &mut io::StdoutLock) {
 fn editor_refresh_screen(output: &mut io::StdoutLock) {
     write!(output, "\x1b[2J").unwrap();
     write!(output, "\x1b[H").unwrap();
+
+    editor_draw_rows(output);
+
+    write!(output, "\x1b[H").unwrap();
+
+    output.flush().unwrap();
+}
+
+fn editor_draw_rows(output: &mut io::StdoutLock) {
+    for _ in 0..24 {
+        write!(output, "~\r\n").unwrap();
+    }
 }
 
 fn editor_process_keypress(input: &mut StdinRawMode, output: &mut io::StdoutLock) -> Result<bool> {
@@ -86,9 +98,9 @@ fn editor_process_keypress(input: &mut StdinRawMode, output: &mut io::StdoutLock
 
     let c = b as char;
     if is_ctrl(b) {
-        write!(output, "{}\r\n", b);
+        write!(output, "{}\r\n", b).unwrap();
     } else {
-        write!(output, "{} ({})\r\n", b, c);
+        write!(output, "{} ({})\r\n", b, c).unwrap();
     }
 
     if b == ctrl_key('q') {
