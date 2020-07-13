@@ -1,51 +1,56 @@
-use kirocode::{Error, Result, StdinRawMode};
+use kirocode::{Error, Result, Screen, StdinRawMode};
 
 use std::io::{self, Write};
 
 fn main() {
-    let output = io::stdout();
-    let mut output = output.lock();
-
-    editor_refresh_screen(&mut output);
-    output.flush().unwrap();
-
-    match StdinRawMode::new() {
-        Ok(mut input) => loop {
-            editor_refresh_screen(&mut output);
-            match editor_process_keypress(&mut input, &mut output) {
-                Ok(ok) => {
-                    if !ok {
-                        write!(&mut output, "\x1b[2J").unwrap();
-                        write!(&mut output, "\x1b[H").unwrap();
-                        break;
-                    }
-                }
-                Err(err) => die(err, &mut output),
-            }
-        },
-        Err(err) => die(err, &mut output),
-    };
+    if let Err(err) = edit() {
+        die(err);
+    }
 }
 
-fn die(err: Error, output: &mut io::StdoutLock) {
-    write!(output, "\x1b[2J").unwrap();
-    write!(output, "\x1b[H").unwrap();
+fn edit() -> Result<()> {
+    let mut input = StdinRawMode::new()?;
+    let output = io::stdout();
+    let output = output.lock();
+
+    let mut screen = Screen::new(None, output);
+    let size = (screen.rows, screen.cols);
+
+    editor_refresh_screen(&mut screen.output, size);
+    screen.output.flush().unwrap();
+
+    loop {
+        editor_refresh_screen(&mut screen.output, size);
+        let ok = editor_process_keypress(&mut input, &mut screen.output)?;
+        if !ok {
+            write!(&mut screen.output, "\x1b[2J").unwrap();
+            write!(&mut screen.output, "\x1b[H").unwrap();
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+fn die(err: Error) {
+    print!("\x1b[2J");
+    print!("\x1b[H");
     eprintln!("{}", err);
 }
 
-fn editor_refresh_screen(output: &mut io::StdoutLock) {
+fn editor_refresh_screen(output: &mut io::StdoutLock, size: (usize, usize)) {
     write!(output, "\x1b[2J").unwrap();
     write!(output, "\x1b[H").unwrap();
 
-    editor_draw_rows(output);
+    editor_draw_rows(output, size.0);
 
     write!(output, "\x1b[H").unwrap();
 
     output.flush().unwrap();
 }
 
-fn editor_draw_rows(output: &mut io::StdoutLock) {
-    for _ in 0..24 {
+fn editor_draw_rows(output: &mut io::StdoutLock, rows: usize) {
+    for _ in 0..rows {
         write!(output, "~\r\n").unwrap();
     }
 }
