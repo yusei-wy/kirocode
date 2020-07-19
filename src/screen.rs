@@ -52,8 +52,12 @@ where
     }
 
     pub fn draw_rows(&mut self, rows: usize) -> Result<()> {
-        for _ in 0..rows {
-            self.output.write(b"~\r\n")?;
+        for y in 0..rows {
+            self.output.write(b"~")?;
+
+            if y < self.rows - 1 {
+                self.output.write(b"\r\n")?;
+            }
         }
         Ok(())
     }
