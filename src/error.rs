@@ -1,10 +1,14 @@
 use std::convert::From;
 use std::fmt;
 use std::io;
+use std::num;
 
 pub enum Error {
     IoError(io::Error),
+    ParseIntError(num::ParseIntError),
     InputReadByteError,
+    InputNotFoundEscapeError,
+    ScreenGetSizeError,
 }
 
 impl fmt::Display for Error {
@@ -12,7 +16,10 @@ impl fmt::Display for Error {
         use Error::*;
         match self {
             IoError(err) => write!(f, "{}", err),
+            ParseIntError(err) => write!(f, "{}", err),
             InputReadByteError => write!(f, "input read byte error"),
+            InputNotFoundEscapeError => write!(f, "input not found escape error"),
+            ScreenGetSizeError => write!(f, "screen get size error"),
         }
     }
 }
@@ -20,6 +27,12 @@ impl fmt::Display for Error {
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
         Error::IoError(err)
+    }
+}
+
+impl From<num::ParseIntError> for Error {
+    fn from(err: num::ParseIntError) -> Error {
+        Error::ParseIntError(err)
     }
 }
 

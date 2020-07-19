@@ -1,4 +1,8 @@
+use crate::error::{Error, Result};
+use crate::input::StdinRawMode;
+
 use std::io::Write;
+use std::str::FromStr;
 
 pub struct Screen<W: Write> {
     pub rows: usize,
@@ -11,28 +15,81 @@ impl<W> Screen<W>
 where
     W: Write,
 {
-    pub fn new(size: Option<(usize, usize)>, output: W) -> Self {
-        if let Some(s) = size {
-            return Self {
-                rows: s.0,
-                cols: s.1,
+    pub fn new(
+        size: Option<(usize, usize)>,
+        input: &mut StdinRawMode,
+        mut output: W,
+    ) -> Result<Self> {
+        if let Some((w, h)) = size {
+            return Ok(Self {
+                rows: w,
+                cols: h,
                 output,
-            };
+            });
         }
 
-        let size = get_window_size();
-        Self {
-            rows: size.0,
-            cols: size.1,
+        let (w, h) = get_window_size(input, &mut output)?;
+        Ok(Self {
+            rows: w,
+            cols: h,
             output,
-        }
+        })
     }
 }
 
-fn get_window_size() -> (usize, usize) {
-    if let Some((w, h)) = term_size::dimensions() {
-        return (w, h);
+fn get_window_size<W>(input: &mut StdinRawMode, output: &mut W) -> Result<(usize, usize)>
+where
+    W: Write,
+{
+    if let Some(s) = term_size::dimensions() {
+        return Ok(s);
     }
 
-    (0, 0)
+    output.write(b"\x1b[999C\x1b[999B")?;
+    output.flush()?;
+
+    let (w, h) = get_cursor_position(input, output)?;
+
+    Ok((w, h))
+}
+
+fn get_cursor_position<W>(input: &mut StdinRawMode, output: &mut W) -> Result<(usize, usize)>
+where
+    W: Write,
+{
+    let mut buf: Vec<u8> = Vec::with_capacity(32);
+    let mut i: usize = 0;
+
+    output.write(b"\x1b[6n")?;
+    output.flush()?;
+
+    loop {
+        if i >= buf.capacity() - 1 {
+            break;
+        }
+        let ob = input.read_byte()?;
+        if let Some(b) = ob {
+            buf.push(b);
+            if b == b'R' {
+                break;
+            }
+        }
+        i += 1;
+    }
+    buf[i] = b'\0';
+
+    if buf[0] != b'\x1b' || buf[1] != b'[' {
+        return Err(Error::InputNotFoundEscapeError);
+    }
+    let buf_str = buf[2..].iter().map(|&s| s as char).collect::<String>();
+    let s = buf_str.split('\0').collect::<Vec<&str>>()[0]
+        .split(';')
+        .collect::<Vec<&str>>();
+    if s.len() != 2 {
+        return Err(Error::ScreenGetSizeError);
+    }
+
+    let w = usize::from_str(s[0])?;
+    let h = usize::from_str(s[1])?;
+    Ok((w, h))
 }

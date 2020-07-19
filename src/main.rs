@@ -13,18 +13,20 @@ fn edit() -> Result<()> {
     let output = io::stdout();
     let output = output.lock();
 
-    let mut screen = Screen::new(None, output);
+    let mut screen = Screen::new(None, &mut input, output)?;
     let size = (screen.rows, screen.cols);
 
-    editor_refresh_screen(&mut screen.output, size);
-    screen.output.flush().unwrap();
+    eprintln!("size: {:?}", size);
+
+    editor_refresh_screen(&mut screen.output, size)?;
+    screen.output.flush()?;
 
     loop {
-        editor_refresh_screen(&mut screen.output, size);
+        editor_refresh_screen(&mut screen.output, size)?;
         let ok = editor_process_keypress(&mut input, &mut screen.output)?;
         if !ok {
-            write!(&mut screen.output, "\x1b[2J").unwrap();
-            write!(&mut screen.output, "\x1b[H").unwrap();
+            screen.output.write(b"\x1b[2J")?;
+            screen.output.write(b"\x1b[H")?;
             break;
         }
     }
@@ -38,21 +40,23 @@ fn die(err: Error) {
     eprintln!("{}", err);
 }
 
-fn editor_refresh_screen(output: &mut io::StdoutLock, size: (usize, usize)) {
-    write!(output, "\x1b[2J").unwrap();
-    write!(output, "\x1b[H").unwrap();
+fn editor_refresh_screen(output: &mut io::StdoutLock, size: (usize, usize)) -> Result<()> {
+    output.write(b"\x1b[2J")?;
+    output.write(b"\x1b[H")?;
 
-    editor_draw_rows(output, size.0);
+    editor_draw_rows(output, size.0)?;
 
-    write!(output, "\x1b[H").unwrap();
+    output.write(b"\x1b[H")?;
+    output.flush()?;
 
-    output.flush().unwrap();
+    Ok(())
 }
 
-fn editor_draw_rows(output: &mut io::StdoutLock, rows: usize) {
+fn editor_draw_rows(output: &mut io::StdoutLock, rows: usize) -> Result<()> {
     for _ in 0..rows {
-        write!(output, "~\r\n").unwrap();
+        output.write(b"~\r\n")?;
     }
+    Ok(())
 }
 
 fn editor_process_keypress(input: &mut StdinRawMode, output: &mut io::StdoutLock) -> Result<bool> {
@@ -60,9 +64,9 @@ fn editor_process_keypress(input: &mut StdinRawMode, output: &mut io::StdoutLock
 
     let c = b as char;
     if is_ctrl(b) {
-        write!(output, "{}\r\n", b).unwrap();
+        write!(output, "{}\r\n", b)?;
     } else {
-        write!(output, "{} ({})\r\n", b, c).unwrap();
+        write!(output, "{} ({})\r\n", b, c)?;
     }
 
     if b == ctrl_key('q') {
