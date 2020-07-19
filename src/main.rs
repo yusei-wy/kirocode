@@ -1,6 +1,6 @@
 use kirocode::{Error, Result, Screen, StdinRawMode};
 
-use std::io::{self, Write};
+use std::io;
 
 fn main() {
     if let Err(err) = edit() {
@@ -18,15 +18,13 @@ fn edit() -> Result<()> {
 
     eprintln!("size: {:?}", size);
 
-    editor_refresh_screen(&mut screen.output, size)?;
-    screen.output.flush()?;
+    screen.refresh()?;
 
     loop {
-        editor_refresh_screen(&mut screen.output, size)?;
-        let ok = editor_process_keypress(&mut input, &mut screen.output)?;
+        screen.refresh()?;
+        let ok = editor_process_keypress(&mut input)?;
         if !ok {
-            screen.output.write(b"\x1b[2J")?;
-            screen.output.write(b"\x1b[H")?;
+            screen.clear()?;
             break;
         }
     }
@@ -40,33 +38,14 @@ fn die(err: Error) {
     eprintln!("{}", err);
 }
 
-fn editor_refresh_screen(output: &mut io::StdoutLock, size: (usize, usize)) -> Result<()> {
-    output.write(b"\x1b[2J")?;
-    output.write(b"\x1b[H")?;
-
-    editor_draw_rows(output, size.0)?;
-
-    output.write(b"\x1b[H")?;
-    output.flush()?;
-
-    Ok(())
-}
-
-fn editor_draw_rows(output: &mut io::StdoutLock, rows: usize) -> Result<()> {
-    for _ in 0..rows {
-        output.write(b"~\r\n")?;
-    }
-    Ok(())
-}
-
-fn editor_process_keypress(input: &mut StdinRawMode, output: &mut io::StdoutLock) -> Result<bool> {
+fn editor_process_keypress(input: &mut StdinRawMode) -> Result<bool> {
     let b = editor_read_key(input)?;
 
     let c = b as char;
     if is_ctrl(b) {
-        write!(output, "{}\r\n", b)?;
+        print!("{}\r\n", b);
     } else {
-        write!(output, "{} ({})\r\n", b, c)?;
+        print!("{} ({})\r\n", b, c);
     }
 
     if b == ctrl_key('q') {

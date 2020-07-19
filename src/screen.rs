@@ -7,8 +7,7 @@ use std::str::FromStr;
 pub struct Screen<W: Write> {
     pub rows: usize,
     pub cols: usize,
-    // TODO: private にしたい
-    pub output: W,
+    output: W,
 }
 
 impl<W> Screen<W>
@@ -34,6 +33,29 @@ where
             cols: h,
             output,
         })
+    }
+
+    pub fn clear(&mut self) -> Result<()> {
+        self.output.write(b"\x1b[2J")?;
+        self.output.write(b"\x1b[H")?;
+        Ok(())
+    }
+
+    pub fn refresh(&mut self) -> Result<()> {
+        self.clear()?;
+
+        self.draw_rows(self.rows)?;
+
+        self.output.write(b"\x1b[H")?;
+        self.output.flush()?;
+        Ok(())
+    }
+
+    pub fn draw_rows(&mut self, rows: usize) -> Result<()> {
+        for _ in 0..rows {
+            self.output.write(b"~\r\n")?;
+        }
+        Ok(())
     }
 }
 
