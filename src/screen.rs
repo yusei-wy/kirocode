@@ -8,6 +8,7 @@ pub struct Screen<W: Write> {
     pub rows: usize,
     pub cols: usize,
     output: W,
+    buf: Vec<u8>,
 }
 
 impl<W> Screen<W>
@@ -19,11 +20,13 @@ where
         input: &mut StdinRawMode,
         mut output: W,
     ) -> Result<Self> {
+        let buf = Vec::new();
         if let Some((w, h)) = size {
             return Ok(Self {
                 rows: w,
                 cols: h,
                 output,
+                buf,
             });
         }
 
@@ -32,6 +35,7 @@ where
             rows: w,
             cols: h,
             output,
+            buf,
         })
     }
 
@@ -44,22 +48,30 @@ where
     pub fn refresh(&mut self) -> Result<()> {
         self.clear()?;
 
-        self.draw_rows(self.rows)?;
+        self.draw_rows(self.rows);
 
-        self.output.write(b"\x1b[H")?;
-        self.output.flush()?;
+        self.append_buffers(b"\x1b[H");
+
+        let b = &self.buf;
+        self.output.write(b)?;
         Ok(())
     }
 
-    pub fn draw_rows(&mut self, rows: usize) -> Result<()> {
+    pub fn draw_rows(&mut self, rows: usize) {
         for y in 0..rows {
-            self.output.write(b"~")?;
+            self.append_buffers(b"~");
 
             if y < self.rows - 1 {
-                self.output.write(b"\r\n")?;
+                self.append_buffers(b"\r\n");
             }
         }
-        Ok(())
+    }
+
+    fn append_buffers(&mut self, buf: &[u8]) {
+        let buf = buf.iter().map(|b| *b).collect::<Vec<u8>>();
+        for b in buf {
+            self.buf.push(b);
+        }
     }
 }
 
@@ -72,7 +84,6 @@ where
     }
 
     output.write(b"\x1b[999C\x1b[999B")?;
-    output.flush()?;
 
     let (w, h) = get_cursor_position(input, output)?;
 
@@ -87,7 +98,6 @@ where
     let mut i: usize = 0;
 
     output.write(b"\x1b[6n")?;
-    output.flush()?;
 
     loop {
         if i >= buf.capacity() - 1 {
