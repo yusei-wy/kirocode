@@ -46,11 +46,14 @@ where
     }
 
     pub fn refresh(&mut self) -> Result<()> {
-        self.clear()?;
+        self.append_buffers(b"\x1b[?25l");
+        self.append_buffers(b"\x1b[2J");
+        self.append_buffers(b"\x1b[H");
 
         self.draw_rows(self.rows);
 
         self.append_buffers(b"\x1b[H");
+        self.append_buffers(b"\x1b[?25h");
 
         let b = &self.buf;
         self.output.write(b)?;
