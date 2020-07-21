@@ -47,7 +47,6 @@ where
 
     pub fn refresh(&mut self) -> Result<()> {
         self.append_buffers(b"\x1b[?25l");
-        self.append_buffers(b"\x1b[2J");
         self.append_buffers(b"\x1b[H");
 
         self.draw_rows(self.rows);
@@ -64,6 +63,7 @@ where
         for y in 0..rows {
             self.append_buffers(b"~");
 
+            self.append_buffers(b"\x1b[K");
             if y < self.rows - 1 {
                 self.append_buffers(b"\r\n");
             }
