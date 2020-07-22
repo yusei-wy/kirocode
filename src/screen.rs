@@ -4,6 +4,8 @@ use crate::input::StdinRawMode;
 use std::io::Write;
 use std::str::FromStr;
 
+const VERSION: &str = "0.0.1";
+
 pub struct Screen<W: Write> {
     pub rows: usize,
     pub cols: usize,
@@ -46,32 +48,44 @@ where
     }
 
     pub fn refresh(&mut self) -> Result<()> {
-        self.append_buffers(b"\x1b[?25l");
-        self.append_buffers(b"\x1b[H");
+        self.append_buffers(b"\x1b[?25l", 4);
+        self.append_buffers(b"\x1b[H", 3);
 
-        self.draw_rows(self.rows);
+        self.draw_rows();
 
-        self.append_buffers(b"\x1b[H");
-        self.append_buffers(b"\x1b[?25h");
+        self.append_buffers(b"\x1b[H", 3);
+        self.append_buffers(b"\x1b[?25h", 6);
 
         let b = &self.buf;
         self.output.write(b)?;
+        self.output.flush()?;
         Ok(())
     }
 
-    pub fn draw_rows(&mut self, rows: usize) {
-        for y in 0..rows {
-            self.append_buffers(b"~");
+    pub fn draw_rows(&mut self) {
+        for y in 0..self.rows {
+            // TODO: rows が大きすぎる, ほんとは / 3
+            if y == self.rows / 2 {
+                let welcom = format!("KiroCode -- version {}", VERSION);
+                let welcom_len = if welcom.len() > self.cols {
+                    self.cols
+                } else {
+                    welcom.len()
+                };
+                self.append_buffers(welcom.as_bytes(), welcom_len);
+            } else {
+                self.append_buffers(b"~", 1);
+            }
 
-            self.append_buffers(b"\x1b[K");
+            self.append_buffers(b"\x1b[K", 3);
             if y < self.rows - 1 {
-                self.append_buffers(b"\r\n");
+                self.append_buffers(b"\r\n", 2);
             }
         }
     }
 
-    fn append_buffers(&mut self, buf: &[u8]) {
-        let buf = buf.iter().map(|b| *b).collect::<Vec<u8>>();
+    fn append_buffers(&mut self, buf: &[u8], len: usize) {
+        let buf = buf[..len].iter().map(|b| *b).collect::<Vec<u8>>();
         for b in buf {
             self.buf.push(b);
         }
@@ -132,3 +146,5 @@ where
     let h = usize::from_str(s[1])?;
     Ok((w, h))
 }
+
+// TODO: テスト書く
