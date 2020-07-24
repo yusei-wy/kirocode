@@ -1,0 +1,7 @@
+language: rust
+os:
+  - linux
+rust: stable
+cache: cargo
+script:
+  - cargo test --verbose --all
