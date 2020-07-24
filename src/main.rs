@@ -53,10 +53,7 @@ fn editor_process_keypress(input: &mut StdinRawMode) -> Result<bool> {
 
 fn editor_read_key(input: &mut StdinRawMode) -> Result<u8> {
     let ob = input.read_byte()?;
-    match ob {
-        Some(b) => Ok(b),
-        None => Err(Error::InputReadByteError),
-    }
+    ob.ok_or(Error::InputReadByteError)
 }
 
 fn is_ctrl(b: u8) -> bool {
