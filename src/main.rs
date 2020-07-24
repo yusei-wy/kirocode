@@ -1,6 +1,6 @@
 use kirocode::{Error, Result, Screen, StdinRawMode};
 
-use std::io;
+use std::io::{self, BufWriter};
 
 fn main() {
     if let Err(err) = edit() {
@@ -11,13 +11,9 @@ fn main() {
 fn edit() -> Result<()> {
     let mut input = StdinRawMode::new()?;
     let output = io::stdout();
-    let output = output.lock();
+    let output = BufWriter::new(output.lock());
 
     let mut screen = Screen::new(None, &mut input, output)?;
-    let size = (screen.rows, screen.cols);
-
-    eprintln!("size: {:?}", size);
-
     screen.refresh()?;
 
     loop {
@@ -76,7 +72,7 @@ fn ctrl_key(c: char) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
+    use super::*;
 
     #[test]
     fn test_is_ctrl() {
