@@ -25,8 +25,8 @@ where
         let buf = Vec::new();
         if let Some((w, h)) = size {
             return Ok(Self {
-                rows: w,
-                cols: h,
+                rows: h,
+                cols: w,
                 output,
                 buf,
             });
@@ -34,8 +34,8 @@ where
 
         let (w, h) = get_window_size(input, &mut output)?;
         Ok(Self {
-            rows: w,
-            cols: h,
+                rows: h,
+                cols: w,
             output,
             buf,
         })
@@ -64,8 +64,7 @@ where
 
     pub fn draw_rows(&mut self) {
         for y in 0..self.rows {
-            // TODO: rows が大きすぎる, ほんとは / 3
-            if y == self.rows / 2 {
+            if y == self.rows / 3 {
                 let welcom = format!("KiroCode -- version {}", VERSION);
                 let welcom_len = if welcom.len() > self.cols {
                     self.cols
