@@ -71,6 +71,20 @@ where
                 } else {
                     welcom.len()
                 };
+                let padding: i32 = (self.cols - welcom_len) as i32;
+                let mut padding = padding / 2;
+                if padding > 0 {
+                    self.append_buffers(b"~", 1);
+                    padding -= 1;
+                }
+                loop {
+                    padding -= 1;
+                    if padding > 0 {
+                        self.append_buffers(b" ", 1);
+                    } else {
+                        break;
+                    }
+                }
                 self.append_buffers(welcom.as_bytes(), welcom_len);
             } else {
                 self.append_buffers(b"~", 1);
