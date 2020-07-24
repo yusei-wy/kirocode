@@ -59,6 +59,7 @@ where
         let b = &self.buf;
         self.output.write(b)?;
         self.output.flush()?; // 描画後は flush しないとカーソルの位置が上に戻らない
+
         Ok(())
     }
 
@@ -113,8 +114,6 @@ where
         return Ok(s);
     }
 
-    output.write(b"\x1b[999C\x1b[999B")?;
-
     let (w, h) = get_cursor_position(input, output)?;
 
     Ok((w, h))
@@ -127,7 +126,8 @@ where
     let mut buf: Vec<u8> = Vec::with_capacity(32);
     let mut i: usize = 0;
 
-    output.write(b"\x1b[6n")?;
+    output.write(b"\x1b[999C\x1b[999B\x1b[6n")?;
+    output.flush()?;
 
     loop {
         if i >= buf.capacity() - 1 {
@@ -147,8 +147,7 @@ where
     if buf[0] != b'\x1b' || buf[1] != b'[' {
         return Err(Error::InputNotFoundEscapeError);
     }
-    // TODO: collect をへらす
-    let buf_str = buf[2..].iter().map(|&s| s as char).collect::<String>();
+    let buf_str = buf[2..].iter().map(|&b| b as char).collect::<String>();
     let s = buf_str.split('\0').collect::<Vec<&str>>()[0]
         .split(';')
         .collect::<Vec<&str>>();
