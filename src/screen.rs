@@ -34,8 +34,8 @@ where
 
         let (w, h) = get_window_size(input, &mut output)?;
         Ok(Self {
-                rows: h,
-                cols: w,
+            rows: h,
+            cols: w,
             output,
             buf,
         })
@@ -58,7 +58,7 @@ where
 
         let b = &self.buf;
         self.output.write(b)?;
-        self.output.flush()?;
+        self.output.flush()?; // 描画後は flush しないとカーソルの位置が上に戻らない
         Ok(())
     }
 
@@ -147,6 +147,7 @@ where
     if buf[0] != b'\x1b' || buf[1] != b'[' {
         return Err(Error::InputNotFoundEscapeError);
     }
+    // TODO: collect をへらす
     let buf_str = buf[2..].iter().map(|&s| s as char).collect::<String>();
     let s = buf_str.split('\0').collect::<Vec<&str>>()[0]
         .split(';')
@@ -160,4 +161,38 @@ where
     Ok((w, h))
 }
 
-// TODO: テスト書く
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::io::{self, BufWriter};
+
+    // 複数の StdinRawMode インスタンスを取得すると drop が正常に呼ばれずに raw モードが解除できない
+    #[test]
+    fn test_screen() {
+        // new
+        let mut input = StdinRawMode::new().unwrap();
+        let output = io::stdout();
+        let output = BufWriter::new(output.lock());
+        let mut screen = Screen::new(None, &mut input, output).unwrap();
+        assert!(screen.rows > 0);
+        assert!(screen.cols > 0);
+
+        // new default size
+        let output2 = io::stdout();
+        let output2 = BufWriter::new(output2.lock());
+        let screen_default_size = Screen::new(Some((50, 50)), &mut input, output2).unwrap();
+        assert_eq!(screen_default_size.rows, 50);
+        assert_eq!(screen_default_size.cols, 50);
+
+        // append_buffers
+        screen.append_buffers(b"0123456789", 10);
+        assert_eq!(screen.buf.len(), 10);
+
+        screen.append_buffers(b"0123456789", 10);
+        assert_eq!(screen.buf.len(), 20);
+
+        screen.append_buffers(b"0123456789", 5);
+        assert_eq!(screen.buf.len(), 25);
+    }
+}

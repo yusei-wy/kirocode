@@ -3,6 +3,7 @@ use std::fmt;
 use std::io;
 use std::num;
 
+#[derive(Debug)]
 pub enum Error {
     IoError(io::Error),
     ParseIntError(num::ParseIntError),

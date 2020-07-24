@@ -37,11 +37,15 @@ impl StdinRawMode {
             Some(one_byte[0])
         })
     }
+
+    fn disable_raw_mode(&mut self) {
+        use termios::*;
+        tcsetattr(self.stdin.as_raw_fd(), termios::TCSAFLUSH, &self.org).unwrap();
+    }
 }
 
 impl Drop for StdinRawMode {
     fn drop(&mut self) {
-        use termios::*;
-        tcsetattr(self.stdin.as_raw_fd(), termios::TCSAFLUSH, &self.org).unwrap();
+        self.disable_raw_mode();
     }
 }
