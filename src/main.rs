@@ -59,15 +59,6 @@ fn editor_read_key(input: &mut StdinRawMode) -> Result<u8> {
     ob.ok_or(Error::InputReadByteError)
 }
 
-fn editor_move_cursor(b: u8) {}
-
-fn is_ctrl(b: u8) -> bool {
-    match b {
-        0x00..=0x1f | 0x7f => true,
-        _ => false,
-    }
-}
-
 fn ctrl_key(c: char) -> u8 {
     c as u8 & 0x1f
 }
@@ -75,17 +66,6 @@ fn ctrl_key(c: char) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_is_ctrl() {
-        assert!(!is_ctrl(32));
-        assert!(!is_ctrl(126));
-        assert!(!is_ctrl(128));
-        assert!(is_ctrl(0));
-        assert!(is_ctrl(30));
-        assert!(is_ctrl(31));
-        assert!(is_ctrl(127));
-    }
 
     #[test]
     fn test_ctrl_key() {
