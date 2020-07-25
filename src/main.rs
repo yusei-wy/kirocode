@@ -1,12 +1,20 @@
 use kirocode::{Error, Result, Screen, StdinRawMode};
 
-use std::io::{self, BufWriter};
+use std::io::{self, BufWriter, Write};
 
 fn main() {
     if let Err(err) = edit() {
         die(err);
     }
 }
+
+fn die(err: Error) {
+    print!("\x1b[2J");
+    print!("\x1b[H");
+    eprintln!("{}", err);
+}
+
+// TODO: editor 関係の処理を別ファイルに分離する
 
 fn edit() -> Result<()> {
     let mut input = StdinRawMode::new()?;
@@ -18,7 +26,7 @@ fn edit() -> Result<()> {
 
     loop {
         screen.refresh()?;
-        let ok = editor_process_keypress(&mut input)?;
+        let ok = editor_process_keypress(&mut input, &mut screen)?;
         if !ok {
             screen.clear()?;
             break;
@@ -28,24 +36,19 @@ fn edit() -> Result<()> {
     Ok(())
 }
 
-fn die(err: Error) {
-    print!("\x1b[2J");
-    print!("\x1b[H");
-    eprintln!("{}", err);
-}
-
-fn editor_process_keypress(input: &mut StdinRawMode) -> Result<bool> {
+fn editor_process_keypress<W>(input: &mut StdinRawMode, screen: &mut Screen<W>) -> Result<bool>
+where
+    W: Write,
+{
     let b = editor_read_key(input)?;
-
-    let c = b as char;
-    if is_ctrl(b) {
-        print!("{}\r\n", b);
-    } else {
-        print!("{} ({})\r\n", b, c);
-    }
 
     if b == ctrl_key('q') {
         return Ok(false);
+    }
+
+    match b {
+        b'w' | b's' | b'a' | b'd' => screen.move_cursor(b),
+        _ => {}
     }
 
     Ok(true)
@@ -55,6 +58,8 @@ fn editor_read_key(input: &mut StdinRawMode) -> Result<u8> {
     let ob = input.read_byte()?;
     ob.ok_or(Error::InputReadByteError)
 }
+
+fn editor_move_cursor(b: u8) {}
 
 fn is_ctrl(b: u8) -> bool {
     match b {

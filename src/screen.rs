@@ -7,8 +7,10 @@ use std::str::FromStr;
 const VERSION: &str = "0.0.1";
 
 pub struct Screen<W: Write> {
-    pub rows: usize,
-    pub cols: usize,
+    cx: usize,
+    cy: usize,
+    rows: usize,
+    cols: usize,
     output: W,
     buf: Vec<u8>,
 }
@@ -25,6 +27,8 @@ where
         let buf = Vec::new();
         if let Some((w, h)) = size {
             return Ok(Self {
+                cx: 0,
+                cy: 0,
                 rows: h,
                 cols: w,
                 output,
@@ -34,6 +38,8 @@ where
 
         let (w, h) = get_window_size(input, &mut output)?;
         Ok(Self {
+            cx: 0,
+            cy: 0,
             rows: h,
             cols: w,
             output,
@@ -52,8 +58,9 @@ where
         self.append_buffers(b"\x1b[H", 3);
 
         self.draw_rows();
+        let buf = format!("\x1b[{};{}H", self.cy + 1, self.cx + 1);
+        self.append_buffers(buf.as_bytes(), buf.len());
 
-        self.append_buffers(b"\x1b[H", 3);
         self.append_buffers(b"\x1b[?25h", 6);
 
         let b = &self.buf;
@@ -63,7 +70,7 @@ where
         Ok(())
     }
 
-    pub fn draw_rows(&mut self) {
+    fn draw_rows(&mut self) {
         for y in 0..self.rows {
             if y == self.rows / 3 {
                 let welcom = format!("KiroCode -- version {}", VERSION);
@@ -102,6 +109,32 @@ where
         let buf = buf[..len].iter().map(|b| *b).collect::<Vec<u8>>();
         for b in buf {
             self.buf.push(b);
+        }
+    }
+
+    pub fn move_cursor(&mut self, b: u8) {
+        match b {
+            b'a' => {
+                if self.cx > 0 {
+                    self.cx -= 1;
+                }
+            }
+            b'd' => {
+                if self.cx < self.cols {
+                    self.cx += 1
+                }
+            }
+            b'w' => {
+                if self.cy > 0 {
+                    self.cy -= 1;
+                }
+            }
+            b's' => {
+                if self.cy < self.rows {
+                    self.cy += 1;
+                }
+            }
+            _ => {}
         }
     }
 }
