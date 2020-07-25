@@ -120,7 +120,7 @@ where
                 }
             }
             b'd' => {
-                if self.cx < self.cols {
+                if self.cx <= self.cols {
                     self.cx += 1
                 }
             }
@@ -130,7 +130,7 @@ where
                 }
             }
             b's' => {
-                if self.cy < self.rows {
+                if self.cy <= self.rows {
                     self.cy += 1;
                 }
             }
