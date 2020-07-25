@@ -56,7 +56,28 @@ where
 
 fn editor_read_key(input: &mut StdinRawMode) -> Result<u8> {
     let ob = input.read_byte()?;
-    ob.ok_or(Error::InputReadByteError)
+    let b = ob.ok_or(Error::InputReadByteError)?;
+    if b != b'\x1b' {
+        return Ok(b);
+    }
+
+    let mut seq: Vec<u8> = Vec::with_capacity(3);
+    seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
+    seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
+
+    if seq[0] != b'[' {
+        return Ok(b'\x1b');
+    }
+
+    match seq[1] {
+        b'A' => return Ok(b'w'),
+        b'B' => return Ok(b's'),
+        b'C' => return Ok(b'd'),
+        b'D' => return Ok(b'a'),
+        _ => {}
+    }
+
+    Ok(b'\x1b')
 }
 
 fn ctrl_key(c: char) -> u8 {
