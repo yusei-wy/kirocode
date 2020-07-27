@@ -1,3 +1,4 @@
+use crate::editor::Sequence;
 use crate::error::{Error, Result};
 use crate::input::StdinRawMode;
 
@@ -112,24 +113,24 @@ where
         }
     }
 
-    pub fn move_cursor(&mut self, b: u8) {
-        match b {
-            b'a' => {
+    pub fn move_cursor(&mut self, seq: Sequence) {
+        match seq {
+            Sequence::AllowLeft => {
                 if self.cx > 0 {
                     self.cx -= 1;
                 }
             }
-            b'd' => {
+            Sequence::AllowRight => {
                 if self.cx <= self.cols {
                     self.cx += 1
                 }
             }
-            b'w' => {
+            Sequence::AllowUp => {
                 if self.cy > 0 {
                     self.cy -= 1;
                 }
             }
-            b's' => {
+            Sequence::AllowDown => {
                 if self.cy <= self.rows {
                     self.cy += 1;
                 }
