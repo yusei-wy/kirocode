@@ -48,6 +48,12 @@ where
         })
     }
 
+    // getter
+
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+
     pub fn clear(&mut self) -> Result<()> {
         self.output.write(b"\x1b[2J")?;
         self.output.write(b"\x1b[H")?;

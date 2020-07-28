@@ -4,11 +4,14 @@ use crate::screen::Screen;
 
 use std::io::{self, BufWriter, Write};
 
+#[derive(PartialEq)]
 pub enum Sequence {
     AllowLeft,
     AllowRight,
     AllowUp,
     AllowDown,
+    PageUp,
+    PageDown,
     Key(u8),
 }
 
@@ -44,6 +47,22 @@ where
                 return Ok(false);
             }
         }
+
+        Sequence::PageUp | Sequence::PageDown => {
+            let mut times = screen.rows();
+            loop {
+                times -= 1;
+                if times == 0 {
+                    break;
+                }
+                if seq == Sequence::PageUp {
+                    screen.move_cursor(Sequence::AllowUp);
+                } else {
+                    screen.move_cursor(Sequence::AllowDown);
+                }
+            }
+        }
+
         Sequence::AllowUp | Sequence::AllowDown | Sequence::AllowRight | Sequence::AllowLeft => {
             screen.move_cursor(seq)
         }
@@ -67,12 +86,23 @@ fn editor_read_key(input: &mut StdinRawMode) -> Result<Sequence> {
         return Ok(Sequence::Key(b'\x1b'));
     }
 
-    match seq[1] {
-        b'A' => return Ok(Sequence::AllowUp),
-        b'B' => return Ok(Sequence::AllowDown),
-        b'C' => return Ok(Sequence::AllowRight),
-        b'D' => return Ok(Sequence::AllowLeft),
-        _ => {}
+    if b'0' <= seq[1] && seq[1] <= b'9' {
+        seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
+        if seq[2] == b'~' {
+            match seq[1] {
+                b'5' => return Ok(Sequence::PageUp),
+                b'6' => return Ok(Sequence::PageDown),
+                _ => {}
+            }
+        }
+    } else {
+        match seq[1] {
+            b'A' => return Ok(Sequence::AllowUp),
+            b'B' => return Ok(Sequence::AllowDown),
+            b'C' => return Ok(Sequence::AllowRight),
+            b'D' => return Ok(Sequence::AllowLeft),
+            _ => {}
+        }
     }
 
     Ok(Sequence::Key(b'\x1b'))
