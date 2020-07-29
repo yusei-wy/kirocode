@@ -54,6 +54,16 @@ where
         self.rows
     }
 
+    pub fn cols(&self) -> usize {
+        self.cols
+    }
+
+    // setter
+
+    pub fn set_cx(&mut self, cx: usize) {
+        self.cx = cx;
+    }
+
     pub fn clear(&mut self) -> Result<()> {
         self.output.write(b"\x1b[2J")?;
         self.output.write(b"\x1b[H")?;

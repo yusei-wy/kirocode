@@ -10,6 +10,8 @@ pub enum Sequence {
     AllowRight,
     AllowUp,
     AllowDown,
+    Home,
+    End,
     PageUp,
     PageDown,
     Key(u8),
@@ -48,6 +50,14 @@ where
             }
         }
 
+        Sequence::Home => {
+            screen.set_cx(0);
+        }
+
+        Sequence::End => {
+            screen.set_cx(screen.cols() - 1);
+        }
+
         Sequence::PageUp | Sequence::PageDown => {
             let mut times = screen.rows();
             loop {
@@ -82,25 +92,33 @@ fn editor_read_key(input: &mut StdinRawMode) -> Result<Sequence> {
     seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
     seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
 
-    if seq[0] != b'[' {
-        return Ok(Sequence::Key(b'\x1b'));
-    }
-
-    if b'0' <= seq[1] && seq[1] <= b'9' {
-        seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
-        if seq[2] == b'~' {
+    if seq[0] == b'[' {
+        if b'0' <= seq[1] && seq[1] <= b'9' {
+            seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
+            if seq[2] == b'~' {
+                match seq[1] {
+                    b'1' | b'7' => return Ok(Sequence::Home),
+                    b'4' | b'8' => return Ok(Sequence::End),
+                    b'5' => return Ok(Sequence::PageUp),
+                    b'6' => return Ok(Sequence::PageDown),
+                    _ => {}
+                }
+            }
+        } else {
             match seq[1] {
-                b'5' => return Ok(Sequence::PageUp),
-                b'6' => return Ok(Sequence::PageDown),
+                b'A' => return Ok(Sequence::AllowUp),
+                b'B' => return Ok(Sequence::AllowDown),
+                b'C' => return Ok(Sequence::AllowRight),
+                b'D' => return Ok(Sequence::AllowLeft),
+                b'H' => return Ok(Sequence::Home),
+                b'F' => return Ok(Sequence::End),
                 _ => {}
             }
         }
-    } else {
+    } else if seq[0] == b'O' {
         match seq[1] {
-            b'A' => return Ok(Sequence::AllowUp),
-            b'B' => return Ok(Sequence::AllowDown),
-            b'C' => return Ok(Sequence::AllowRight),
-            b'D' => return Ok(Sequence::AllowLeft),
+            b'H' => return Ok(Sequence::Home),
+            b'F' => return Ok(Sequence::End),
             _ => {}
         }
     }
