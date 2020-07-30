@@ -2,7 +2,7 @@ use crate::error::{Error, Result};
 use crate::input::StdinRawMode;
 use crate::screen::Screen;
 
-use std::io::{self, BufWriter, Write};
+use std::io::Write;
 
 #[derive(PartialEq)]
 pub enum Sequence {
@@ -17,113 +17,124 @@ pub enum Sequence {
     Key(u8),
 }
 
-pub fn edit() -> Result<()> {
-    let mut input = StdinRawMode::new()?;
-    let output = io::stdout();
-    let output = BufWriter::new(output.lock());
-
-    let mut screen = Screen::new(None, &mut input, output)?;
-    screen.refresh()?;
-
-    loop {
-        screen.refresh()?;
-        let ok = editor_process_keypress(&mut input, &mut screen)?;
-        if !ok {
-            screen.clear()?;
-            break;
-        }
-    }
-
-    Ok(())
+pub struct Editor<W: Write> {
+    screen: Screen<W>,
+    input: StdinRawMode,
 }
 
-fn editor_process_keypress<W>(input: &mut StdinRawMode, screen: &mut Screen<W>) -> Result<bool>
+impl<W> Editor<W>
 where
     W: Write,
 {
-    let seq = editor_read_key(input)?;
+    pub fn open(output: W) -> Result<Self> {
+        let mut input = StdinRawMode::new()?;
+        let mut screen = Screen::new(None, &mut input, output)?;
+        screen.refresh()?;
 
-    match seq {
-        Sequence::Key(b) => {
-            if b == ctrl_key('q') {
-                return Ok(false);
+        Ok(Self { screen, input })
+    }
+
+    pub fn edit(&mut self) -> Result<()> {
+        self.screen.refresh()?;
+
+        loop {
+            self.screen.refresh()?;
+            let ok = self.process_keypress()?;
+            if !ok {
+                self.screen.clear()?;
+                break;
             }
         }
 
-        Sequence::Home => {
-            screen.set_cx(0);
-        }
+        Ok(())
+    }
 
-        Sequence::End => {
-            screen.set_cx(screen.cols() - 1);
-        }
+    fn process_keypress(&mut self) -> Result<bool> {
+        let seq = self.read_key()?;
 
-        Sequence::PageUp | Sequence::PageDown => {
-            let mut times = screen.rows();
-            loop {
-                times -= 1;
-                if times == 0 {
-                    break;
-                }
-                if seq == Sequence::PageUp {
-                    screen.move_cursor(Sequence::AllowUp);
-                } else {
-                    screen.move_cursor(Sequence::AllowDown);
+        match seq {
+            Sequence::Key(b) => {
+                if b == ctrl_key('q') {
+                    return Ok(false);
                 }
             }
+
+            Sequence::Home => {
+                self.screen.set_cx(0);
+            }
+
+            Sequence::End => {
+                self.screen.set_cx(self.screen.cols() - 1);
+            }
+
+            Sequence::PageUp | Sequence::PageDown => {
+                let mut times = self.screen.rows();
+                loop {
+                    times -= 1;
+                    if times == 0 {
+                        break;
+                    }
+                    if seq == Sequence::PageUp {
+                        self.screen.move_cursor(Sequence::AllowUp);
+                    } else {
+                        self.screen.move_cursor(Sequence::AllowDown);
+                    }
+                }
+            }
+
+            Sequence::AllowUp
+            | Sequence::AllowDown
+            | Sequence::AllowRight
+            | Sequence::AllowLeft => self.screen.move_cursor(seq),
         }
 
-        Sequence::AllowUp | Sequence::AllowDown | Sequence::AllowRight | Sequence::AllowLeft => {
-            screen.move_cursor(seq)
+        Ok(true)
+    }
+
+    fn read_key(&mut self) -> Result<Sequence> {
+        let ob = self.input.read_byte()?;
+        let b = ob.ok_or(Error::InputReadByteError)?;
+        if b != b'\x1b' {
+            return Ok(Sequence::Key(b));
         }
-    }
 
-    Ok(true)
-}
+        let mut seq: Vec<u8> = Vec::with_capacity(3);
+        seq.push(self.input.read_byte()?.ok_or(Error::InputReadByteError)?);
+        seq.push(self.input.read_byte()?.ok_or(Error::InputReadByteError)?);
 
-fn editor_read_key(input: &mut StdinRawMode) -> Result<Sequence> {
-    let ob = input.read_byte()?;
-    let b = ob.ok_or(Error::InputReadByteError)?;
-    if b != b'\x1b' {
-        return Ok(Sequence::Key(b));
-    }
-
-    let mut seq: Vec<u8> = Vec::with_capacity(3);
-    seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
-    seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
-
-    if seq[0] == b'[' {
-        if b'0' <= seq[1] && seq[1] <= b'9' {
-            seq.push(input.read_byte()?.ok_or(Error::InputReadByteError)?);
-            if seq[2] == b'~' {
+        if seq[0] == b'[' {
+            if b'0' <= seq[1] && seq[1] <= b'9' {
+                seq.push(self.input.read_byte()?.ok_or(Error::InputReadByteError)?);
+                if seq[2] == b'~' {
+                    match seq[1] {
+                        b'1' | b'7' => return Ok(Sequence::Home),
+                        b'4' | b'8' => return Ok(Sequence::End),
+                        b'5' => return Ok(Sequence::PageUp),
+                        b'6' => return Ok(Sequence::PageDown),
+                        _ => {}
+                    }
+                }
+            } else {
                 match seq[1] {
-                    b'1' | b'7' => return Ok(Sequence::Home),
-                    b'4' | b'8' => return Ok(Sequence::End),
-                    b'5' => return Ok(Sequence::PageUp),
-                    b'6' => return Ok(Sequence::PageDown),
+                    b'A' => return Ok(Sequence::AllowUp),
+                    b'B' => return Ok(Sequence::AllowDown),
+                    b'C' => return Ok(Sequence::AllowRight),
+                    b'D' => return Ok(Sequence::AllowLeft),
+                    b'H' => return Ok(Sequence::Home),
+                    b'F' => return Ok(Sequence::End),
                     _ => {}
                 }
             }
-        } else {
+        } else if seq[0] == b'O' {
             match seq[1] {
-                b'A' => return Ok(Sequence::AllowUp),
-                b'B' => return Ok(Sequence::AllowDown),
-                b'C' => return Ok(Sequence::AllowRight),
-                b'D' => return Ok(Sequence::AllowLeft),
                 b'H' => return Ok(Sequence::Home),
                 b'F' => return Ok(Sequence::End),
                 _ => {}
             }
         }
-    } else if seq[0] == b'O' {
-        match seq[1] {
-            b'H' => return Ok(Sequence::Home),
-            b'F' => return Ok(Sequence::End),
-            _ => {}
-        }
-    }
 
-    Ok(Sequence::Key(b'\x1b'))
+        Ok(Sequence::Key(b'\x1b'))
+    }
 }
 
 fn ctrl_key(c: char) -> u8 {
