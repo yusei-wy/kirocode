@@ -10,6 +10,7 @@ pub enum Sequence {
     AllowRight,
     AllowUp,
     AllowDown,
+    Del,
     Home,
     End,
     PageUp,
@@ -86,6 +87,8 @@ where
             | Sequence::AllowDown
             | Sequence::AllowRight
             | Sequence::AllowLeft => self.screen.move_cursor(seq),
+
+            Sequence::Del => {}
         }
 
         Ok(true)
@@ -109,6 +112,7 @@ where
                     match seq[1] {
                         b'1' | b'7' => return Ok(Sequence::Home),
                         b'4' | b'8' => return Ok(Sequence::End),
+                        b'3' => return Ok(Sequence::Del),
                         b'5' => return Ok(Sequence::PageUp),
                         b'6' => return Ok(Sequence::PageDown),
                         _ => {}
