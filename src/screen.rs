@@ -70,11 +70,12 @@ where
         Ok(())
     }
 
-    pub fn refresh(&mut self) -> Result<()> {
+    pub fn refresh(&mut self, num_size: usize, size: usize, editor_buf: &[u8]) -> Result<()> {
         self.append_buffers(b"\x1b[?25l", 4);
         self.append_buffers(b"\x1b[H", 3);
 
-        self.draw_rows();
+        self.draw_rows(num_size, size, editor_buf);
+
         let buf = format!("\x1b[{};{}H", self.cy + 1, self.cx + 1);
         self.append_buffers(buf.as_bytes(), buf.len());
 
@@ -87,32 +88,40 @@ where
         Ok(())
     }
 
-    fn draw_rows(&mut self) {
+    fn draw_rows(&mut self, num_rows: usize, size: usize, editor_buf: &[u8]) {
         for y in 0..self.rows {
-            if y == self.rows / 3 {
-                let welcom = format!("KiroCode -- version {}", VERSION);
-                let welcom_len = if welcom.len() > self.cols {
-                    self.cols
-                } else {
-                    welcom.len()
-                };
-                let padding: i32 = (self.cols - welcom_len) as i32;
-                let mut padding = padding / 2;
-                if padding > 0 {
-                    self.append_buffers(b"~", 1);
-                    padding -= 1;
-                }
-                loop {
-                    padding -= 1;
-                    if padding > 0 {
-                        self.append_buffers(b" ", 1);
+            if y >= num_rows {
+                if y == self.rows / 3 {
+                    let welcom = format!("KiroCode -- version {}", VERSION);
+                    let welcom_len = if welcom.len() > self.cols {
+                        self.cols
                     } else {
-                        break;
+                        welcom.len()
+                    };
+                    let padding: i32 = (self.cols - welcom_len) as i32;
+                    let mut padding = padding / 2;
+                    if padding > 0 {
+                        self.append_buffers(b"~", 1);
+                        padding -= 1;
                     }
+                    loop {
+                        padding -= 1;
+                        if padding > 0 {
+                            self.append_buffers(b" ", 1);
+                        } else {
+                            break;
+                        }
+                    }
+                    self.append_buffers(welcom.as_bytes(), welcom_len);
+                } else {
+                    self.append_buffers(b"~", 1);
                 }
-                self.append_buffers(welcom.as_bytes(), welcom_len);
             } else {
-                self.append_buffers(b"~", 1);
+                let mut len = size;
+                if len > self.cols {
+                    len = self.cols;
+                }
+                self.append_buffers(editor_buf, len);
             }
 
             self.append_buffers(b"\x1b[K", 3);

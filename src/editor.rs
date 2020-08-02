@@ -2,7 +2,9 @@ use crate::error::{Error, Result};
 use crate::input::StdinRawMode;
 use crate::screen::Screen;
 
-use std::io::Write;
+use std::fs::File;
+use std::io::{self, BufRead, Write};
+use std::path::Path;
 
 #[derive(PartialEq)]
 pub enum Sequence {
@@ -21,25 +23,83 @@ pub enum Sequence {
 pub struct Editor<W: Write> {
     screen: Screen<W>,
     input: StdinRawMode,
+    num_rows: usize,
+    row: EditorRow,
+}
+
+struct EditorRow {
+    size: usize,
+    buf: Vec<u8>,
 }
 
 impl<W> Editor<W>
 where
     W: Write,
 {
-    pub fn open(output: W) -> Result<Self> {
+    pub fn new(output: W) -> Result<Self> {
         let mut input = StdinRawMode::new()?;
-        let mut screen = Screen::new(None, &mut input, output)?;
-        screen.refresh()?;
+        let screen = Screen::new(None, &mut input, output)?;
 
-        Ok(Self { screen, input })
+        let editor = Self {
+            screen,
+            input,
+            num_rows: 1,
+            row: EditorRow {
+                size: 0,
+                buf: Vec::new(),
+            },
+        };
+
+        Ok(editor)
+    }
+
+    pub fn open(filepath: &str, output: W) -> Result<Self> {
+        let mut buf: Vec<u8> = Vec::new();
+        if let Ok(lines) = Self::read_lines(filepath) {
+            for line in lines {
+                if let Ok(ip) = line {
+                    buf = ip.as_bytes().to_vec();
+                }
+                break;
+            }
+        }
+
+        let mut size = buf.len();
+        loop {
+            if size > 0 && (buf[size - 1] == b'\n' || buf[size - 1] == b'\r') {
+                size -= 1;
+            }
+            break;
+        }
+
+        let mut input = StdinRawMode::new()?;
+        let screen = Screen::new(None, &mut input, output)?;
+
+        let editor = Self {
+            screen,
+            input,
+            num_rows: 1,
+            row: EditorRow { size, buf },
+        };
+
+        Ok(editor)
+    }
+
+    fn read_lines<P>(filepath: P) -> Result<io::Lines<io::BufReader<File>>>
+    where
+        P: AsRef<Path>,
+    {
+        let file = File::open(filepath)?;
+        Ok(io::BufReader::new(file).lines())
     }
 
     pub fn edit(&mut self) -> Result<()> {
-        self.screen.refresh()?;
+        self.screen
+            .refresh(self.num_rows, self.row.size, &self.row.buf)?;
 
         loop {
-            self.screen.refresh()?;
+            self.screen
+                .refresh(self.num_rows, self.row.size, &self.row.buf)?;
             let ok = self.process_keypress()?;
             if !ok {
                 self.screen.clear()?;
