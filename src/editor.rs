@@ -43,7 +43,7 @@ where
         let editor = Self {
             screen,
             input,
-            num_rows: 1,
+            num_rows: 0,
             row: EditorRow {
                 size: 0,
                 buf: Vec::new(),

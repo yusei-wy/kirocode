@@ -91,7 +91,7 @@ where
     fn draw_rows(&mut self, num_rows: usize, size: usize, editor_buf: &[u8]) {
         for y in 0..self.rows {
             if y >= num_rows {
-                if y == self.rows / 3 {
+                if num_rows == 0 && y == self.rows / 3 {
                     let welcom = format!("KiroCode -- version {}", VERSION);
                     let welcom_len = if welcom.len() > self.cols {
                         self.cols
