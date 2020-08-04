@@ -54,6 +54,19 @@ where
     }
 
     pub fn open(filepath: &str, output: W) -> Result<Self> {
+        let mut input = StdinRawMode::new()?;
+        let screen = Screen::new(None, &mut input, output)?;
+
+        let mut editor = Self {
+            screen,
+            input,
+            num_rows: 1,
+            row: EditorRow {
+                size: 0,
+                buf: Vec::new(),
+            },
+        };
+
         let mut buf: Vec<u8> = Vec::new();
         if let Ok(lines) = Self::read_lines(filepath) {
             for line in lines {
@@ -72,15 +85,7 @@ where
             break;
         }
 
-        let mut input = StdinRawMode::new()?;
-        let screen = Screen::new(None, &mut input, output)?;
-
-        let editor = Self {
-            screen,
-            input,
-            num_rows: 1,
-            row: EditorRow { size, buf },
-        };
+        editor.append_row(buf, size);
 
         Ok(editor)
     }
@@ -91,6 +96,12 @@ where
     {
         let file = File::open(filepath)?;
         Ok(io::BufReader::new(file).lines())
+    }
+
+    fn append_row(&mut self, buf: Vec<u8>, len: usize) {
+        self.row.size = len;
+        self.row.buf.extend(buf);
+        self.num_rows = 1;
     }
 
     pub fn edit(&mut self) -> Result<()> {
