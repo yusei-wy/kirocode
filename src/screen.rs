@@ -1,4 +1,4 @@
-use crate::editor::Sequence;
+use crate::editor::{EditorRow, Sequence};
 use crate::error::{Error, Result};
 use crate::input::StdinRawMode;
 
@@ -70,11 +70,11 @@ where
         Ok(())
     }
 
-    pub fn refresh(&mut self, num_size: usize, size: usize, editor_buf: &[u8]) -> Result<()> {
+    pub fn refresh(&mut self, num_size: usize, rows: &mut Vec<EditorRow>) -> Result<()> {
         self.append_buffers(b"\x1b[?25l", 4);
         self.append_buffers(b"\x1b[H", 3);
 
-        self.draw_rows(num_size, size, editor_buf);
+        self.draw_rows(num_size, rows);
 
         let buf = format!("\x1b[{};{}H", self.cy + 1, self.cx + 1);
         self.append_buffers(buf.as_bytes(), buf.len());
@@ -88,7 +88,7 @@ where
         Ok(())
     }
 
-    fn draw_rows(&mut self, num_rows: usize, size: usize, editor_buf: &[u8]) {
+    fn draw_rows(&mut self, num_rows: usize, rows: &mut Vec<EditorRow>) {
         for y in 0..self.rows {
             if y >= num_rows {
                 if num_rows == 0 && y == self.rows / 3 {
@@ -117,11 +117,13 @@ where
                     self.append_buffers(b"~", 1);
                 }
             } else {
-                let mut len = size;
-                if len > self.cols {
-                    len = self.cols;
+                if let Some(row) = rows.get(y) {
+                    if row.size > self.cols {
+                        self.append_buffers(&row.buf, self.cols);
+                    } else {
+                        self.append_buffers(&row.buf, row.size);
+                    }
                 }
-                self.append_buffers(editor_buf, len);
             }
 
             self.append_buffers(b"\x1b[K", 3);

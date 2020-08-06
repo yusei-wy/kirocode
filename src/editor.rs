@@ -24,12 +24,12 @@ pub struct Editor<W: Write> {
     screen: Screen<W>,
     input: StdinRawMode,
     num_rows: usize,
-    row: EditorRow,
+    rows: Vec<EditorRow>,
 }
 
-struct EditorRow {
-    size: usize,
-    buf: Vec<u8>,
+pub struct EditorRow {
+    pub size: usize,
+    pub buf: Vec<u8>,
 }
 
 impl<W> Editor<W>
@@ -44,10 +44,7 @@ where
             screen,
             input,
             num_rows: 0,
-            row: EditorRow {
-                size: 0,
-                buf: Vec::new(),
-            },
+            rows: Vec::new(),
         };
 
         Ok(editor)
@@ -61,31 +58,25 @@ where
             screen,
             input,
             num_rows: 1,
-            row: EditorRow {
-                size: 0,
-                buf: Vec::new(),
-            },
+            rows: Vec::new(),
         };
 
-        let mut buf: Vec<u8> = Vec::new();
         if let Ok(lines) = Self::read_lines(filepath) {
             for line in lines {
                 if let Ok(ip) = line {
-                    buf = ip.as_bytes().to_vec();
+                    let buf = ip.into_bytes();
+                    let mut size = buf.len();
+                    loop {
+                        if size > 0 && (buf[size - 1] == b'\n' || buf[size - 1] == b'\r') {
+                            size -= 1;
+                        }
+                        break;
+                    }
+
+                    editor.append_row(buf, size);
                 }
-                break;
             }
         }
-
-        let mut size = buf.len();
-        loop {
-            if size > 0 && (buf[size - 1] == b'\n' || buf[size - 1] == b'\r') {
-                size -= 1;
-            }
-            break;
-        }
-
-        editor.append_row(buf, size);
 
         Ok(editor)
     }
@@ -99,18 +90,15 @@ where
     }
 
     fn append_row(&mut self, buf: Vec<u8>, len: usize) {
-        self.row.size = len;
-        self.row.buf.extend(buf);
-        self.num_rows = 1;
+        self.rows.push(EditorRow { size: len, buf });
+        self.num_rows += 1;
     }
 
     pub fn edit(&mut self) -> Result<()> {
-        self.screen
-            .refresh(self.num_rows, self.row.size, &self.row.buf)?;
+        self.screen.refresh(self.num_rows, &mut self.rows)?;
 
         loop {
-            self.screen
-                .refresh(self.num_rows, self.row.size, &self.row.buf)?;
+            self.screen.refresh(self.num_rows, &mut self.rows)?;
             let ok = self.process_keypress()?;
             if !ok {
                 self.screen.clear()?;
