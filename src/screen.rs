@@ -12,6 +12,8 @@ pub struct Screen<W: Write> {
     cy: usize,
     rows: usize,
     cols: usize,
+    row_off: usize,
+    col_off: usize,
     output: W,
     buf: Vec<u8>,
 }
@@ -32,6 +34,8 @@ where
                 cy: 0,
                 rows: h,
                 cols: w,
+                row_off: 0,
+                col_off: 0,
                 output,
                 buf,
             });
@@ -43,6 +47,8 @@ where
             cy: 0,
             rows: h,
             cols: w,
+            row_off: 0,
+            col_off: 0,
             output,
             buf,
         })
@@ -71,6 +77,8 @@ where
     }
 
     pub fn refresh(&mut self, num_size: usize, rows: &mut Vec<EditorRow>) -> Result<()> {
+        self.scroll();
+
         self.append_buffers(b"\x1b[?25l", 4);
         self.append_buffers(b"\x1b[H", 3);
 
@@ -90,7 +98,8 @@ where
 
     fn draw_rows(&mut self, num_rows: usize, rows: &mut Vec<EditorRow>) {
         for y in 0..self.rows {
-            if y >= num_rows {
+            let file_row = y + self.row_off;
+            if file_row >= num_rows {
                 if num_rows == 0 && y == self.rows / 3 {
                     let welcom = format!("KiroCode -- version {}", VERSION);
                     let welcom_len = if welcom.len() > self.cols {
@@ -117,7 +126,7 @@ where
                     self.append_buffers(b"~", 1);
                 }
             } else {
-                if let Some(row) = rows.get(y) {
+                if let Some(row) = rows.get(file_row) {
                     if row.size > self.cols {
                         self.append_buffers(&row.buf, self.cols);
                     } else {
@@ -140,7 +149,18 @@ where
         }
     }
 
-    pub fn move_cursor(&mut self, seq: Sequence) {
+    fn scroll(&mut self) {
+        // カーソルが可視ウィンドウ上にあるなら、カーソル位置まで移動
+        if self.cy < self.row_off {
+            self.row_off = self.cy;
+        }
+        // カーソルが可視ウィンドウの下部を超えているなら、カーソルを画面の下部で固定
+        if self.cy >= self.row_off + self.rows {
+            self.row_off = self.cy - self.rows + 1;
+        }
+    }
+
+    pub fn move_cursor(&mut self, seq: Sequence, buf_rows: usize) {
         match seq {
             Sequence::AllowLeft => {
                 if self.cx > 0 {
@@ -158,7 +178,7 @@ where
                 }
             }
             Sequence::AllowDown => {
-                if self.cy <= self.rows {
+                if self.cy < buf_rows {
                     self.cy += 1;
                 }
             }

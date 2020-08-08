@@ -23,7 +23,7 @@ pub enum Sequence {
 pub struct Editor<W: Write> {
     screen: Screen<W>,
     input: StdinRawMode,
-    num_rows: usize,
+    buf_rows: usize,
     rows: Vec<EditorRow>,
 }
 
@@ -43,7 +43,7 @@ where
         let editor = Self {
             screen,
             input,
-            num_rows: 0,
+            buf_rows: 0,
             rows: Vec::new(),
         };
 
@@ -57,7 +57,7 @@ where
         let mut editor = Self {
             screen,
             input,
-            num_rows: 1,
+            buf_rows: 1,
             rows: Vec::new(),
         };
 
@@ -91,14 +91,14 @@ where
 
     fn append_row(&mut self, buf: Vec<u8>, len: usize) {
         self.rows.push(EditorRow { size: len, buf });
-        self.num_rows += 1;
+        self.buf_rows += 1;
     }
 
     pub fn edit(&mut self) -> Result<()> {
-        self.screen.refresh(self.num_rows, &mut self.rows)?;
+        self.screen.refresh(self.buf_rows, &mut self.rows)?;
 
         loop {
-            self.screen.refresh(self.num_rows, &mut self.rows)?;
+            self.screen.refresh(self.buf_rows, &mut self.rows)?;
             let ok = self.process_keypress()?;
             if !ok {
                 self.screen.clear()?;
@@ -135,9 +135,9 @@ where
                         break;
                     }
                     if seq == Sequence::PageUp {
-                        self.screen.move_cursor(Sequence::AllowUp);
+                        self.screen.move_cursor(Sequence::AllowUp, self.buf_rows);
                     } else {
-                        self.screen.move_cursor(Sequence::AllowDown);
+                        self.screen.move_cursor(Sequence::AllowDown, self.buf_rows);
                     }
                 }
             }
@@ -145,7 +145,7 @@ where
             Sequence::AllowUp
             | Sequence::AllowDown
             | Sequence::AllowRight
-            | Sequence::AllowLeft => self.screen.move_cursor(seq),
+            | Sequence::AllowLeft => self.screen.move_cursor(seq, self.buf_rows),
 
             Sequence::Del => {}
         }
