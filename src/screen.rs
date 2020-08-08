@@ -84,7 +84,7 @@ where
 
         self.draw_rows(num_size, rows);
 
-        let buf = format!("\x1b[{};{}H", self.cy + 1, self.cx + 1);
+        let buf = format!("\x1b[{};{}H", (self.cy - self.row_off) + 1, self.cx + 1);
         self.append_buffers(buf.as_bytes(), buf.len());
 
         self.append_buffers(b"\x1b[?25h", 6);
