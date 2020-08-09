@@ -92,6 +92,7 @@ where
         let b = &self.buf;
         self.output.write(b)?;
         self.output.flush()?; // 描画後は flush しないとカーソルの位置が上に戻らない
+        self.free_buffers();
 
         Ok(())
     }
@@ -143,10 +144,11 @@ where
     }
 
     fn append_buffers(&mut self, buf: &[u8], len: usize) {
-        let buf = buf[..len].iter().map(|b| *b).collect::<Vec<u8>>();
-        for b in buf {
-            self.buf.push(b);
-        }
+        self.buf.extend(buf[..len].iter());
+    }
+
+    fn free_buffers(&mut self) {
+        self.buf = Vec::new();
     }
 
     fn scroll(&mut self) {
