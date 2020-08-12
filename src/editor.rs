@@ -1,28 +1,14 @@
-use crate::error::{Error, Result};
-use crate::input::StdinRawMode;
+use crate::error::Result;
+use crate::input::{InputSeq, KeySeq};
 use crate::screen::Screen;
 
 use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
-#[derive(PartialEq)]
-pub enum Sequence {
-    AllowLeft,
-    AllowRight,
-    AllowUp,
-    AllowDown,
-    Del,
-    Home,
-    End,
-    PageUp,
-    PageDown,
-    Key(u8),
-}
-
-pub struct Editor<W: Write> {
+pub struct Editor<I: Iterator<Item = Result<InputSeq>>, W: Write> {
     screen: Screen<W>,
-    input: StdinRawMode,
+    input: I,
     buf_rows: usize,
     rows: Vec<EditorRow>,
 }
@@ -32,26 +18,12 @@ pub struct EditorRow {
     pub buf: Vec<u8>,
 }
 
-impl<W> Editor<W>
+impl<I, W> Editor<I, W>
 where
+    I: Iterator<Item = Result<InputSeq>>,
     W: Write,
 {
-    pub fn new(output: W) -> Result<Self> {
-        let mut input = StdinRawMode::new()?;
-        let screen = Screen::new(None, &mut input, output)?;
-
-        let editor = Self {
-            screen,
-            input,
-            buf_rows: 0,
-            rows: Vec::new(),
-        };
-
-        Ok(editor)
-    }
-
-    pub fn open(filepath: &str, output: W) -> Result<Self> {
-        let mut input = StdinRawMode::new()?;
+    pub fn open<P: AsRef<Path>>(filepath: P, mut input: I, output: W) -> Result<Self> {
         let screen = Screen::new(None, &mut input, output)?;
 
         let mut editor = Self {
@@ -81,6 +53,19 @@ where
         Ok(editor)
     }
 
+    pub fn new(mut input: I, output: W) -> Result<Self> {
+        let screen = Screen::new(None, &mut input, output)?;
+
+        let editor = Self {
+            screen,
+            input,
+            buf_rows: 0,
+            rows: Vec::new(),
+        };
+
+        Ok(editor)
+    }
+
     fn read_lines<P>(filepath: P) -> Result<io::Lines<io::BufReader<File>>>
     where
         P: AsRef<Path>,
@@ -99,8 +84,13 @@ where
 
         loop {
             self.screen.refresh(self.buf_rows, &mut self.rows)?;
-            let ok = self.process_keypress()?;
-            if !ok {
+            if let Some(seq) = self.input.next() {
+                let ok = self.process_keypress(seq?)?;
+                if !ok {
+                    self.screen.clear()?;
+                    break;
+                }
+            } else {
                 self.screen.clear()?;
                 break;
             }
@@ -109,107 +99,42 @@ where
         Ok(())
     }
 
-    fn process_keypress(&mut self) -> Result<bool> {
-        let seq = self.read_key()?;
-
+    fn process_keypress(&mut self, seq: InputSeq) -> Result<bool> {
+        use KeySeq::*;
         match seq {
-            Sequence::Key(b) => {
-                if b == ctrl_key('q') {
-                    return Ok(false);
-                }
-            }
+            // FIXME: ctrl: true が処理できない
+            InputSeq {
+                key, ctrl: true, ..
+            } => match key {
+                Key(b'q') => return Ok(false),
+                _ => {}
+            },
+            InputSeq { key, .. } => match key {
+                // TODO: テスト用
+                Key(b'q') => return Ok(false),
 
-            Sequence::Home => {
-                self.screen.set_cx(0);
-            }
-
-            Sequence::End => {
-                self.screen.set_cx(self.screen.cols() - 1);
-            }
-
-            Sequence::PageUp | Sequence::PageDown => {
-                let mut times = self.screen.rows();
-                loop {
-                    times -= 1;
-                    if times == 0 {
-                        break;
+                Home => self.screen.set_cx(0),
+                End => self.screen.set_cx(self.screen.cols() - 1),
+                PageUp | PageDown => {
+                    let mut times = self.screen.rows();
+                    loop {
+                        times -= 1;
+                        if times == 0 {
+                            break;
+                        }
+                        if key == PageUp {
+                            self.screen.move_cursor(Up, self.buf_rows);
+                        } else {
+                            self.screen.move_cursor(Down, self.buf_rows);
+                        }
                     }
-                    if seq == Sequence::PageUp {
-                        self.screen.move_cursor(Sequence::AllowUp, self.buf_rows);
-                    } else {
-                        self.screen.move_cursor(Sequence::AllowDown, self.buf_rows);
-                    }
                 }
-            }
-
-            Sequence::AllowUp
-            | Sequence::AllowDown
-            | Sequence::AllowRight
-            | Sequence::AllowLeft => self.screen.move_cursor(seq, self.buf_rows),
-
-            Sequence::Del => {}
+                Up | Down | Right | Left => self.screen.move_cursor(key, self.buf_rows),
+                Del => {}
+                _ => {}
+            },
         }
 
         Ok(true)
-    }
-
-    fn read_key(&mut self) -> Result<Sequence> {
-        let ob = self.input.read_byte()?;
-        let b = ob.ok_or(Error::InputReadByteError)?;
-        if b != b'\x1b' {
-            return Ok(Sequence::Key(b));
-        }
-
-        let mut seq: Vec<u8> = Vec::with_capacity(3);
-        seq.push(self.input.read_byte()?.ok_or(Error::InputReadByteError)?);
-        seq.push(self.input.read_byte()?.ok_or(Error::InputReadByteError)?);
-
-        if seq[0] == b'[' {
-            if b'0' <= seq[1] && seq[1] <= b'9' {
-                seq.push(self.input.read_byte()?.ok_or(Error::InputReadByteError)?);
-                if seq[2] == b'~' {
-                    match seq[1] {
-                        b'1' | b'7' => return Ok(Sequence::Home),
-                        b'4' | b'8' => return Ok(Sequence::End),
-                        b'3' => return Ok(Sequence::Del),
-                        b'5' => return Ok(Sequence::PageUp),
-                        b'6' => return Ok(Sequence::PageDown),
-                        _ => {}
-                    }
-                }
-            } else {
-                match seq[1] {
-                    b'A' => return Ok(Sequence::AllowUp),
-                    b'B' => return Ok(Sequence::AllowDown),
-                    b'C' => return Ok(Sequence::AllowRight),
-                    b'D' => return Ok(Sequence::AllowLeft),
-                    b'H' => return Ok(Sequence::Home),
-                    b'F' => return Ok(Sequence::End),
-                    _ => {}
-                }
-            }
-        } else if seq[0] == b'O' {
-            match seq[1] {
-                b'H' => return Ok(Sequence::Home),
-                b'F' => return Ok(Sequence::End),
-                _ => {}
-            }
-        }
-
-        Ok(Sequence::Key(b'\x1b'))
-    }
-}
-
-fn ctrl_key(c: char) -> u8 {
-    c as u8 & 0x1f
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_ctrl_key() {
-        assert_eq!(ctrl_key('q'), 17);
     }
 }
