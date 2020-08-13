@@ -324,16 +324,31 @@ mod tests {
 
         i = dummy_input_keys(b"a");
         assert_eq!(i.read_byte().unwrap().unwrap(), b'a');
-
-        i = dummy_input_keys("b")
     }
 
     #[test]
-    fn test_input_sequences_decode() {
+    fn test_decode() {
+        // key
         let mut i = dummy_input_keys(b"");
         assert_eq!(i.decode(0x80).unwrap().key, Unidentified);
         assert_eq!(i.decode(0x20).unwrap().key, Key(0x20));
         assert_eq!(i.decode(0x7e).unwrap().key, Key(0x7e));
+
+        // ctrl
+        let seq = i.decode(0x00).unwrap();
+        assert_eq!(seq.key, Key(0x00));
+        assert_eq!(seq.ctrl, true);
+        assert_eq!(seq.alt, false);
+
+        let seq = i.decode(0x1f).unwrap();
+        assert_eq!(seq.key, Key(31));
+        assert_eq!(seq.ctrl, true);
+        assert_eq!(seq.alt, false);
+
+        let seq = i.decode(0x7f).unwrap();
+        assert_eq!(seq.key, Key(31));
+        assert_eq!(seq.ctrl, true);
+        assert_eq!(seq.alt, false);
     }
 
     #[test]

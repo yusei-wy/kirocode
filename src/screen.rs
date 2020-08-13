@@ -188,7 +188,7 @@ where
     }
 }
 
-fn get_window_size<I, W>(input: I, mut output: W) -> Result<(usize, usize)>
+fn get_window_size<I, W>(input: I, output: W) -> Result<(usize, usize)>
 where
     I: Iterator<Item = Result<InputSeq>>,
     W: Write,
@@ -197,6 +197,14 @@ where
         return Ok(s);
     }
 
+    get_cursor_pos(input, output)
+}
+
+fn get_cursor_pos<I, W>(input: I, mut output: W) -> Result<(usize, usize)>
+where
+    I: Iterator<Item = Result<InputSeq>>,
+    W: Write,
+{
     // カーソルを画面右下に移動してフォールバックとしてサイズを取得する
     output.write(b"\x1b[999C\x1b[999B\x1b[6n")?;
     output.flush()?;
@@ -217,46 +225,58 @@ mod tests {
     use crate::error::Error;
     use crate::input::DummyInputSequences;
 
+    use KeySeq::*;
+
     use std::io::{self, BufWriter};
 
     #[test]
-    fn test_screen_new_if_none_window_size_then_error() {
+    fn test_screen_new() {
         let input = DummyInputSequences(vec![]);
         let output = io::stdout();
         let output = BufWriter::new(output.lock());
         match Screen::new(None, input, output) {
-            Err(Error::UnknownWindowSize) => {}
+            Ok(screen) => {
+                assert!(screen.cols > 0);
+                assert!(screen.rows > 0);
+            }
             _ => unreachable!(),
         };
     }
 
-    // TODO: テストを追加
+    #[test]
+    fn test_screen_new_default_size() {
+        let input = DummyInputSequences(vec![]);
+        let output = io::stdout();
+        let output = BufWriter::new(output.lock());
+        match Screen::new(Some((50, 100)), input, output) {
+            Ok(screen) => {
+                assert_eq!(screen.cols, 50);
+                assert_eq!(screen.rows, 100);
+            }
+            _ => unreachable!(),
+        };
+    }
 
     #[test]
-    fn test_screen() {
-        // // new
-        // let mut input = StdinRawMode::new().unwrap();
-        // let output = io::stdout();
-        // let output = BufWriter::new(output.lock());
-        // let mut screen = Screen::new(None, &mut input, output).unwrap();
-        // assert!(screen.rows > 0);
-        // assert!(screen.cols > 0);
+    fn test_get_cursor_pos() {
+        let input = DummyInputSequences(vec![]);
+        let mut output: Vec<u8> = vec![];
 
-        // // new default size
-        // let output2 = io::stdout();
-        // let output2 = BufWriter::new(output2.lock());
-        // let screen_default_size = Screen::new(Some((50, 50)), &mut input, output2).unwrap();
-        // assert_eq!(screen_default_size.rows, 50);
-        // assert_eq!(screen_default_size.cols, 50);
+        match get_cursor_pos(input, &mut output) {
+            Err(Error::UnknownWindowSize) => {}
+            _ => unreachable!(),
+        }
 
-        // // append_buffers
-        // screen.append_buffers(b"0123456789", 10);
-        // assert_eq!(screen.buf.len(), 10);
-
-        // screen.append_buffers(b"0123456789", 10);
-        // assert_eq!(screen.buf.len(), 20);
-
-        // screen.append_buffers(b"0123456789", 5);
-        // assert_eq!(screen.buf.len(), 25);
+        let input = DummyInputSequences(vec![InputSeq::new(Cursor(50, 100))]);
+        let mut output: Vec<u8> = vec![];
+        match get_cursor_pos(input, &mut output) {
+            Ok((x, y)) => {
+                assert_eq!(x, 50);
+                assert_eq!(y, 100);
+            }
+            _ => unreachable!(),
+        }
     }
+
+    // TODO: append_buffers test
 }
