@@ -298,7 +298,9 @@ mod tests {
     impl Read for DummyStdin {
         fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
             buf.as_mut().write(&self.0).unwrap();
-            self.0.remove(0);
+            if self.0.len() > 0 {
+                self.0.remove(0);
+            }
             Ok(buf.len())
         }
     }
