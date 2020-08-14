@@ -1,7 +1,7 @@
 use crate::error::Result;
 
 use std::fmt;
-use std::io::{self, Read};
+use std::io::Read;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::io::AsRawFd;
 use std::str;
@@ -298,6 +298,7 @@ mod tests {
     impl Read for DummyStdin {
         fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
             buf.as_mut().write(&self.0).unwrap();
+            self.0.remove(0);
             Ok(buf.len())
         }
     }
@@ -349,6 +350,79 @@ mod tests {
         assert_eq!(seq.key, Key(31));
         assert_eq!(seq.ctrl, true);
         assert_eq!(seq.alt, false);
+    }
+
+    #[test]
+    fn test_decode_escape_sequence() {
+        let mut i = dummy_input_keys(b"");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Key(0x1b));
+    }
+
+    #[test]
+    fn test_decode_escape_sequence_cursor() {
+        let mut i = dummy_input_keys(b"[24;80R");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Cursor(24, 80));
+    }
+
+    #[test]
+    fn test_decode_escape_sequence_move_cursor() {
+        let mut i = dummy_input_keys(b"[A");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Up);
+
+        let mut i = dummy_input_keys(b"[B");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Down);
+
+        let mut i = dummy_input_keys(b"[C");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Right);
+
+        let mut i = dummy_input_keys(b"[D");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Left);
+    }
+
+    #[test]
+    fn test_decode_escape_sequence_tild() {
+        let mut i = dummy_input_keys(b"[1~");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Home);
+        let mut i = dummy_input_keys(b"[7~");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Home);
+
+        let mut i = dummy_input_keys(b"[4~");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, End);
+        let mut i = dummy_input_keys(b"[8~");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, End);
+
+        let mut i = dummy_input_keys(b"[3~");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Del);
+
+        let mut i = dummy_input_keys(b"[5~");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, PageUp);
+
+        let mut i = dummy_input_keys(b"[6~");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, PageDown);
+    }
+
+    #[test]
+    fn test_decode_escape_sequence_h_or_f() {
+        let mut i = dummy_input_keys(b"[H");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, Home);
+
+        let mut i = dummy_input_keys(b"[F");
+        let seq = i.decode(0x1b).unwrap();
+        assert_eq!(seq.key, End);
     }
 
     #[test]
