@@ -169,7 +169,7 @@ where
                 }
             }
             Right => {
-                if self.cx <= self.cols {
+                if self.cx < self.cols {
                     self.cx += 1
                 }
             }
@@ -227,13 +227,10 @@ mod tests {
 
     use KeySeq::*;
 
-    use std::io::{self, BufWriter};
-
     #[test]
     fn test_screen_new() {
         let input = DummyInputSequences(vec![]);
-        let output = io::stdout();
-        let output = BufWriter::new(output.lock());
+        let output: Vec<u8> = vec![];
         match Screen::new(None, input, output) {
             Ok(screen) => {
                 assert!(screen.cols > 0);
@@ -246,8 +243,7 @@ mod tests {
     #[test]
     fn test_screen_new_default_size() {
         let input = DummyInputSequences(vec![]);
-        let output = io::stdout();
-        let output = BufWriter::new(output.lock());
+        let output: Vec<u8> = vec![];
         match Screen::new(Some((50, 100)), input, output) {
             Ok(screen) => {
                 assert_eq!(screen.cols, 50);
@@ -278,5 +274,75 @@ mod tests {
         }
     }
 
-    // TODO: append_buffers test
+    #[test]
+    fn test_clear() {
+        let input = DummyInputSequences(vec![]);
+        let mut output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, &mut output).unwrap();
+        screen.clear().unwrap();
+        assert_eq!(output, b"\x1b[2J\x1b[H");
+    }
+
+    #[test]
+    fn test_append_buffers() {
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        screen.append_buffers(b"abcde", 3);
+        assert_eq!(screen.buf, vec![b'a', b'b', b'c']);
+    }
+
+    #[test]
+    fn test_free_buffers() {
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        screen.append_buffers(b"abcde", 3);
+        assert_eq!(screen.buf, vec![b'a', b'b', b'c']);
+        screen.free_buffers();
+        assert_eq!(screen.buf, vec![]);
+    }
+
+    #[test]
+    fn test_move_cursor() {
+        // left
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        screen.move_cursor(Left, 1);
+        assert_eq!(screen.cx, 0);
+        screen.move_cursor(Right, 1);
+        assert_eq!(screen.cx, 1);
+
+        // right
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        for _ in 0..100 {
+            screen.move_cursor(Right, 1);
+        }
+        assert_eq!(screen.cx, 50);
+
+        // up
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        screen.move_cursor(Up, 10);
+        assert_eq!(screen.cx, 0);
+        screen.move_cursor(Down, 10);
+        assert_eq!(screen.cy, 1);
+
+        // down
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        for _ in 0..200 {
+            screen.move_cursor(Down, 10);
+        }
+        assert_eq!(screen.cy, 10);
+        for _ in 0..200 {
+            screen.move_cursor(Down, 100);
+        }
+        assert_eq!(screen.cy, 100);
+    }
 }
