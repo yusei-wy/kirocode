@@ -345,4 +345,32 @@ mod tests {
         }
         assert_eq!(screen.cy, 100);
     }
+
+    #[test]
+    fn test_draw_rows_welcom_message() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+        s.draw_rows(0, &mut vec![]);
+
+        let mut buf: Vec<u8> = vec![];
+        for _ in 0..33 {
+            buf.extend(b"~\x1b[K\r\n");
+        }
+        buf.extend(b"~");
+        // NOTE: 12かと思ったけどなぜか10. 理由がわかっていない
+        for _ in 0..10 {
+            buf.extend(b" ");
+        }
+        buf.extend(b"KiroCode -- version 0.0.1\x1b[K\r\n");
+        for _ in 0..65 {
+            buf.extend(b"~\x1b[K\r\n");
+        }
+        buf.extend(b"~\x1b[K");
+
+        assert_eq!(
+            String::from_utf8(s.buf).unwrap(),
+            String::from_utf8(buf).unwrap(),
+        );
+    }
 }
