@@ -227,6 +227,27 @@ mod tests {
 
     use KeySeq::*;
 
+    fn editor_rows_to_buf(erows: Vec<EditorRow>, rows: usize) -> Vec<u8> {
+        let mut buf = vec![];
+        for i in 0..erows.len() {
+            let e = &erows[i];
+            buf.extend(e.buf[..e.size].iter());
+            buf.extend(b"\x1b[K");
+            if i < rows - 1 {
+                buf.extend(b"\r\n");
+            }
+        }
+
+        for i in erows.len()..rows {
+            buf.extend(b"~\x1b[K");
+            if i < rows - 1 {
+                buf.extend(b"\r\n");
+            }
+        }
+
+        return buf;
+    }
+
     #[test]
     fn test_screen_new() {
         let input = DummyInputSequences(vec![]);
@@ -371,6 +392,33 @@ mod tests {
         assert_eq!(
             String::from_utf8(s.buf).unwrap(),
             String::from_utf8(buf).unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_draw_rows_welcom_multiple_rows() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+
+        let mut erows = vec![
+            EditorRow {
+                buf: b"hello".to_vec(),
+                size: 5,
+            },
+            EditorRow {
+                buf: b"world".to_vec(),
+                size: 5,
+            },
+            EditorRow {
+                buf: b"kirocode".to_vec(),
+                size: 8,
+            },
+        ];
+        s.draw_rows(3, &mut erows);
+        assert_eq!(
+            String::from_utf8(s.buf),
+            String::from_utf8(editor_rows_to_buf(erows, 100)),
         );
     }
 }
