@@ -227,6 +227,9 @@ mod tests {
 
     use KeySeq::*;
 
+    #[cfg(test)]
+    use pretty_assertions::assert_eq;
+
     fn editor_rows_to_buf(erows: Vec<EditorRow>, rows: usize) -> Vec<u8> {
         let mut buf = vec![];
         for i in 0..erows.len() {
