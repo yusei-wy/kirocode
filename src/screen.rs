@@ -77,7 +77,7 @@ where
     pub fn refresh(&mut self, num_size: usize, rows: &mut Vec<EditorRow>) -> Result<()> {
         self.scroll();
 
-        self.append_buffers(b"\x1b[?25l", 4);
+        self.append_buffers(b"\x1b[?25l", 6);
         self.append_buffers(b"\x1b[H", 3);
 
         self.draw_rows(num_size, rows);
