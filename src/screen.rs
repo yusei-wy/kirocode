@@ -329,6 +329,28 @@ mod tests {
     }
 
     #[test]
+    fn test_scroll() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+        assert_eq!(s.row_off, 0);
+
+        s.cy = 100;
+        s.row_off = 101;
+        s.scroll();
+        assert_eq!(s.row_off, 100);
+
+        // scroll
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+        s.cy = 150;
+        s.row_off = 50;
+        s.scroll();
+        assert_eq!(s.row_off, 51);
+    }
+
+    #[test]
     fn test_move_cursor() {
         // left
         let input = DummyInputSequences(vec![]);
