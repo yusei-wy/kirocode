@@ -82,6 +82,7 @@ where
 
         self.draw_rows(num_size, rows);
 
+        // cursor
         let buf = format!("\x1b[{};{}H", (self.cy - self.row_off) + 1, self.cx + 1);
         self.append_buffers(buf.as_bytes(), buf.len());
 
@@ -423,5 +424,29 @@ mod tests {
             String::from_utf8(s.buf),
             String::from_utf8(editor_rows_to_buf(erows, 100)),
         );
+    }
+
+    #[test]
+    fn test_refresh() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+
+        let mut erows = vec![EditorRow {
+            buf: b"hello".to_vec(),
+            size: 5,
+        }];
+
+        s.refresh(1, &mut erows).unwrap();
+
+        let mut buf = b"\x1b[?25l\x1b[H".to_vec();
+        buf.extend(editor_rows_to_buf(erows, 100));
+        buf.extend(b"\x1b[1;1H\x1b[?25h");
+
+        // output
+        assert_eq!(String::from_utf8(s.output), String::from_utf8(buf));
+
+        // refresh
+        assert_eq!(s.buf, vec![]);
     }
 }
