@@ -138,3 +138,36 @@ where
         Ok(true)
     }
 }
+
+mod tests {
+    use super::*;
+
+    use crate::input::DummyInputSequences;
+
+    #[test]
+    fn test_editor_new() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let e = Editor::new(i, o).unwrap();
+        assert_eq!(e.buf_rows, 0);
+        assert_eq!(e.rows.len(), 0);
+    }
+
+    #[test]
+    fn test_editor_open() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let e = Editor::open("", i, o).unwrap();
+        assert_eq!(e.buf_rows, 1);
+        assert_eq!(e.rows.len(), 0);
+
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let e = Editor::open("./test.txt", i, o).unwrap();
+        assert_eq!(e.buf_rows, 2);
+        assert_eq!(e.rows.len(), 1);
+
+        assert_eq!(e.rows[0].size, 19);
+        assert_eq!(e.rows[0].buf, b"kirocode test file.");
+    }
+}
