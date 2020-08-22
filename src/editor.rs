@@ -33,7 +33,7 @@ where
             rows: Vec::new(),
         };
 
-        if let Ok(lines) = Self::read_lines(filepath) {
+        if let Ok(lines) = read_lines(filepath) {
             for line in lines {
                 if let Ok(ip) = line {
                     let buf = ip.into_bytes();
@@ -64,14 +64,6 @@ where
         };
 
         Ok(editor)
-    }
-
-    fn read_lines<P>(filepath: P) -> Result<io::Lines<io::BufReader<File>>>
-    where
-        P: AsRef<Path>,
-    {
-        let file = File::open(filepath)?;
-        Ok(io::BufReader::new(file).lines())
     }
 
     fn append_row(&mut self, buf: Vec<u8>, len: usize) {
@@ -139,10 +131,43 @@ where
     }
 }
 
+fn read_lines<P>(filepath: P) -> Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filepath)?;
+    Ok(io::BufReader::new(file).lines())
+}
+
 mod tests {
     use super::*;
 
+    use crate::error::Error;
     use crate::input::DummyInputSequences;
+
+    #[test]
+    fn test_read_lines() {
+        let lines = read_lines("");
+        if let Err(err) = lines {
+            match err {
+                Error::IoError(_) => {}
+                _ => unreachable!(),
+            }
+        }
+
+        if let Ok(lines) = read_lines("./test.txt") {
+            let mut cnt = 0;
+            for line in lines {
+                cnt += 1;
+                if let Ok(ip) = line {
+                    assert_eq!(ip, "kirocode test file.");
+                }
+            }
+            assert_eq!(cnt, 1);
+        } else {
+            unreachable!();
+        }
+    }
 
     #[test]
     fn test_editor_new() {
@@ -169,5 +194,18 @@ mod tests {
 
         assert_eq!(e.rows[0].size, 19);
         assert_eq!(e.rows[0].buf, b"kirocode test file.");
+    }
+
+    #[test]
+    fn test_append_row() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut e = Editor::new(i, o).unwrap();
+
+        e.append_row(b"kirocode".to_vec(), 8);
+        assert_eq!(e.rows.len(), 1);
+        assert_eq!(e.rows[0].size, 8);
+        assert_eq!(e.rows[0].buf, b"kirocode");
+        assert_eq!(e.buf_rows, 1);
     }
 }
