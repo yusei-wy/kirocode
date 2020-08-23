@@ -143,7 +143,8 @@ mod tests {
     use super::*;
 
     use crate::error::Error;
-    use crate::input::DummyInputSequences;
+    use crate::input::{DummyInputSequences, KeySeq};
+    use KeySeq::*;
 
     #[test]
     fn test_read_lines() {
@@ -207,5 +208,19 @@ mod tests {
         assert_eq!(e.rows[0].size, 8);
         assert_eq!(e.rows[0].buf, b"kirocode");
         assert_eq!(e.buf_rows, 1);
+    }
+
+    #[test]
+    fn test_process_keypress() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut e = Editor::new(i, o).unwrap();
+
+        let ret = e.process_keypress(InputSeq::new(Key(b'a')));
+        assert_eq!(ret.unwrap(), true);
+
+        // quit
+        let ret = e.process_keypress(InputSeq::ctrl(Key(b'q')));
+        assert_eq!(ret.unwrap(), false);
     }
 }
