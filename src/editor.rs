@@ -94,7 +94,6 @@ where
     fn process_keypress(&mut self, seq: InputSeq) -> Result<bool> {
         use KeySeq::*;
         match seq {
-            // FIXME: ctrl: true が処理できない
             InputSeq {
                 key, ctrl: true, ..
             } => match key {
@@ -102,9 +101,6 @@ where
                 _ => {}
             },
             InputSeq { key, .. } => match key {
-                // TODO: テスト用
-                Key(b'q') => return Ok(false),
-
                 Home => self.screen.set_cx(0),
                 End => self.screen.set_cx(self.screen.cols() - 1),
                 PageUp | PageDown => {

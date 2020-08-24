@@ -187,9 +187,9 @@ where
         use KeySeq::*;
         match b {
             // 制御文字
-            // TODO: | 00011111 にしなくても動作するかチェック
+            // TODO: なぜ "| 0b1100000" でマスクする必要があるかがわからない
             0x1b => self.decode_escape_sequence(),
-            0x00..=0x1f | 0x7f => Ok(InputSeq::ctrl(Key(b & 0x1f))),
+            0x00..=0x1f | 0x7f => Ok(InputSeq::ctrl(Key(b | 0b1100000))),
             0x20..=0x7e => Ok(InputSeq::new(Key(b))),
             _ => Ok(InputSeq::new(Unidentified)),
         }
