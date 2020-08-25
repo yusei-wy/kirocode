@@ -339,18 +339,23 @@ mod tests {
 
         // ctrl
         let seq = i.decode(0x00).unwrap();
-        assert_eq!(seq.key, Key(0x00));
+        assert_eq!(seq.key, Key(0x60));
         assert_eq!(seq.ctrl, true);
         assert_eq!(seq.alt, false);
 
         let seq = i.decode(0x1f).unwrap();
-        assert_eq!(seq.key, Key(31));
+        assert_eq!(seq.key, Key(127));
         assert_eq!(seq.ctrl, true);
         assert_eq!(seq.alt, false);
 
         let seq = i.decode(0x7f).unwrap();
-        assert_eq!(seq.key, Key(31));
+        assert_eq!(seq.key, Key(127));
         assert_eq!(seq.ctrl, true);
+        assert_eq!(seq.alt, false);
+
+        let seq = i.decode(0x20).unwrap();
+        assert_eq!(seq.key, Key(32));
+        assert_eq!(seq.ctrl, false);
         assert_eq!(seq.alt, false);
     }
 
