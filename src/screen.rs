@@ -1,9 +1,8 @@
-use crate::editor::{EditorRow, Sequence};
+use crate::editor::EditorRow;
 use crate::error::{Error, Result};
-use crate::input::StdinRawMode;
+use crate::input::{InputSeq, KeySeq};
 
 use std::io::Write;
-use std::str::FromStr;
 
 const VERSION: &str = "0.0.1";
 
@@ -22,11 +21,10 @@ impl<W> Screen<W>
 where
     W: Write,
 {
-    pub fn new(
-        size: Option<(usize, usize)>,
-        input: &mut StdinRawMode,
-        mut output: W,
-    ) -> Result<Self> {
+    pub fn new<I>(size: Option<(usize, usize)>, input: I, mut output: W) -> Result<Self>
+    where
+        I: Iterator<Item = Result<InputSeq>>,
+    {
         let buf = Vec::new();
         if let Some((w, h)) = size {
             return Ok(Self {
@@ -79,11 +77,12 @@ where
     pub fn refresh(&mut self, num_size: usize, rows: &mut Vec<EditorRow>) -> Result<()> {
         self.scroll();
 
-        self.append_buffers(b"\x1b[?25l", 4);
+        self.append_buffers(b"\x1b[?25l", 6);
         self.append_buffers(b"\x1b[H", 3);
 
         self.draw_rows(num_size, rows);
 
+        // cursor
         let buf = format!("\x1b[{};{}H", (self.cy - self.row_off) + 1, self.cx + 1);
         self.append_buffers(buf.as_bytes(), buf.len());
 
@@ -162,24 +161,25 @@ where
         }
     }
 
-    pub fn move_cursor(&mut self, seq: Sequence, buf_rows: usize) {
-        match seq {
-            Sequence::AllowLeft => {
+    pub fn move_cursor(&mut self, key: KeySeq, buf_rows: usize) {
+        use KeySeq::*;
+        match key {
+            Left => {
                 if self.cx > 0 {
                     self.cx -= 1;
                 }
             }
-            Sequence::AllowRight => {
-                if self.cx <= self.cols {
+            Right => {
+                if self.cx < self.cols {
                     self.cx += 1
                 }
             }
-            Sequence::AllowUp => {
+            Up => {
                 if self.cy > 0 {
                     self.cy -= 1;
                 }
             }
-            Sequence::AllowDown => {
+            Down => {
                 if self.cy < buf_rows {
                     self.cy += 1;
                 }
@@ -189,92 +189,286 @@ where
     }
 }
 
-fn get_window_size<W>(input: &mut StdinRawMode, output: &mut W) -> Result<(usize, usize)>
+fn get_window_size<I, W>(input: I, output: W) -> Result<(usize, usize)>
 where
+    I: Iterator<Item = Result<InputSeq>>,
     W: Write,
 {
     if let Some(s) = term_size::dimensions() {
         return Ok(s);
     }
 
-    let (w, h) = get_cursor_position(input, output)?;
-
-    Ok((w, h))
+    get_cursor_pos(input, output)
 }
 
-fn get_cursor_position<W>(input: &mut StdinRawMode, output: &mut W) -> Result<(usize, usize)>
+fn get_cursor_pos<I, W>(input: I, mut output: W) -> Result<(usize, usize)>
 where
+    I: Iterator<Item = Result<InputSeq>>,
     W: Write,
 {
-    let mut buf: Vec<u8> = Vec::with_capacity(32);
-    let mut i: usize = 0;
-
+    // カーソルを画面右下に移動してフォールバックとしてサイズを取得する
     output.write(b"\x1b[999C\x1b[999B\x1b[6n")?;
     output.flush()?;
 
-    loop {
-        if i >= buf.capacity() - 1 {
-            break;
+    for seq in input {
+        if let KeySeq::Cursor(w, h) = seq?.key {
+            return Ok((w, h));
         }
-        let ob = input.read_byte()?;
-        if let Some(b) = ob {
-            buf.push(b);
-            if b == b'R' {
-                break;
-            }
-        }
-        i += 1;
-    }
-    buf[i] = b'\0';
-
-    if buf[0] != b'\x1b' || buf[1] != b'[' {
-        return Err(Error::InputNotFoundEscapeError);
-    }
-    let buf_str = buf[2..].iter().map(|&b| b as char).collect::<String>();
-    let s = buf_str.split('\0').collect::<Vec<&str>>()[0]
-        .split(';')
-        .collect::<Vec<&str>>();
-    if s.len() != 2 {
-        return Err(Error::ScreenGetSizeError);
     }
 
-    let w = usize::from_str(s[0])?;
-    let h = usize::from_str(s[1])?;
-    Ok((w, h))
+    Err(Error::UnknownWindowSize)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use std::io::{self, BufWriter};
+    use crate::error::Error;
+    use crate::input::DummyInputSequences;
 
-    // 複数の StdinRawMode インスタンスを取得すると drop が正常に呼ばれずに raw モードが解除できない
+    use KeySeq::*;
+
+    #[cfg(test)]
+    use pretty_assertions::assert_eq;
+
+    fn editor_rows_to_buf(erows: Vec<EditorRow>, rows: usize) -> Vec<u8> {
+        let mut buf = vec![];
+        for i in 0..erows.len() {
+            let e = &erows[i];
+            buf.extend(e.buf[..e.size].iter());
+            buf.extend(b"\x1b[K");
+            if i < rows - 1 {
+                buf.extend(b"\r\n");
+            }
+        }
+
+        for i in erows.len()..rows {
+            buf.extend(b"~\x1b[K");
+            if i < rows - 1 {
+                buf.extend(b"\r\n");
+            }
+        }
+
+        return buf;
+    }
+
     #[test]
-    fn test_screen() {
-        // new
-        let mut input = StdinRawMode::new().unwrap();
-        let output = io::stdout();
-        let output = BufWriter::new(output.lock());
-        let mut screen = Screen::new(None, &mut input, output).unwrap();
-        assert!(screen.rows > 0);
-        assert!(screen.cols > 0);
+    fn test_screen_new() {
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        match Screen::new(None, input, output) {
+            Ok(screen) => {
+                assert!(screen.cols > 0);
+                assert!(screen.rows > 0);
+            }
+            _ => unreachable!(),
+        };
+    }
 
-        // new default size
-        let output2 = io::stdout();
-        let output2 = BufWriter::new(output2.lock());
-        let screen_default_size = Screen::new(Some((50, 50)), &mut input, output2).unwrap();
-        assert_eq!(screen_default_size.rows, 50);
-        assert_eq!(screen_default_size.cols, 50);
+    #[test]
+    fn test_screen_new_default_size() {
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        match Screen::new(Some((50, 100)), input, output) {
+            Ok(screen) => {
+                assert_eq!(screen.cols, 50);
+                assert_eq!(screen.rows, 100);
+            }
+            _ => unreachable!(),
+        };
+    }
 
-        // append_buffers
-        screen.append_buffers(b"0123456789", 10);
-        assert_eq!(screen.buf.len(), 10);
+    #[test]
+    fn test_get_cursor_pos() {
+        let input = DummyInputSequences(vec![]);
+        let mut output: Vec<u8> = vec![];
 
-        screen.append_buffers(b"0123456789", 10);
-        assert_eq!(screen.buf.len(), 20);
+        match get_cursor_pos(input, &mut output) {
+            Err(Error::UnknownWindowSize) => {}
+            _ => unreachable!(),
+        }
 
-        screen.append_buffers(b"0123456789", 5);
-        assert_eq!(screen.buf.len(), 25);
+        let input = DummyInputSequences(vec![InputSeq::new(Cursor(50, 100))]);
+        let mut output: Vec<u8> = vec![];
+        match get_cursor_pos(input, &mut output) {
+            Ok((x, y)) => {
+                assert_eq!(x, 50);
+                assert_eq!(y, 100);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_clear() {
+        let input = DummyInputSequences(vec![]);
+        let mut output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, &mut output).unwrap();
+        screen.clear().unwrap();
+        assert_eq!(output, b"\x1b[2J\x1b[H");
+    }
+
+    #[test]
+    fn test_append_buffers() {
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        screen.append_buffers(b"abcde", 3);
+        assert_eq!(screen.buf, vec![b'a', b'b', b'c']);
+    }
+
+    #[test]
+    fn test_free_buffers() {
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        screen.append_buffers(b"abcde", 3);
+        assert_eq!(screen.buf, vec![b'a', b'b', b'c']);
+        screen.free_buffers();
+        assert_eq!(screen.buf, vec![]);
+    }
+
+    #[test]
+    fn test_scroll() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+        assert_eq!(s.row_off, 0);
+
+        s.cy = 100;
+        s.row_off = 101;
+        s.scroll();
+        assert_eq!(s.row_off, 100);
+
+        // scroll
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+        s.cy = 150;
+        s.row_off = 50;
+        s.scroll();
+        assert_eq!(s.row_off, 51);
+    }
+
+    #[test]
+    fn test_move_cursor() {
+        // left
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        screen.move_cursor(Left, 1);
+        assert_eq!(screen.cx, 0);
+        screen.move_cursor(Right, 1);
+        assert_eq!(screen.cx, 1);
+
+        // right
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        for _ in 0..100 {
+            screen.move_cursor(Right, 1);
+        }
+        assert_eq!(screen.cx, 50);
+
+        // up
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        screen.move_cursor(Up, 10);
+        assert_eq!(screen.cx, 0);
+        screen.move_cursor(Down, 10);
+        assert_eq!(screen.cy, 1);
+
+        // down
+        let input = DummyInputSequences(vec![]);
+        let output: Vec<u8> = vec![];
+        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
+        for _ in 0..200 {
+            screen.move_cursor(Down, 10);
+        }
+        assert_eq!(screen.cy, 10);
+        for _ in 0..200 {
+            screen.move_cursor(Down, 100);
+        }
+        assert_eq!(screen.cy, 100);
+    }
+
+    #[test]
+    fn test_draw_rows_welcom_message() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+        s.draw_rows(0, &mut vec![]);
+
+        let mut buf: Vec<u8> = vec![];
+        for _ in 0..33 {
+            buf.extend(b"~\x1b[K\r\n");
+        }
+        buf.extend(b"~");
+        // NOTE: 12かと思ったけどなぜか10. 理由がわかっていない
+        for _ in 0..10 {
+            buf.extend(b" ");
+        }
+        buf.extend(b"KiroCode -- version 0.0.1\x1b[K\r\n");
+        for _ in 0..65 {
+            buf.extend(b"~\x1b[K\r\n");
+        }
+        buf.extend(b"~\x1b[K");
+
+        assert_eq!(
+            String::from_utf8(s.buf).unwrap(),
+            String::from_utf8(buf).unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_draw_rows_welcom_multiple_rows() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+
+        let mut erows = vec![
+            EditorRow {
+                buf: b"hello".to_vec(),
+                size: 5,
+            },
+            EditorRow {
+                buf: b"world".to_vec(),
+                size: 5,
+            },
+            EditorRow {
+                buf: b"kirocode".to_vec(),
+                size: 8,
+            },
+        ];
+        s.draw_rows(3, &mut erows);
+        assert_eq!(
+            String::from_utf8(s.buf),
+            String::from_utf8(editor_rows_to_buf(erows, 100)),
+        );
+    }
+
+    #[test]
+    fn test_refresh() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut s = Screen::new(Some((50, 100)), i, o).unwrap();
+
+        let mut erows = vec![EditorRow {
+            buf: b"hello".to_vec(),
+            size: 5,
+        }];
+
+        s.refresh(1, &mut erows).unwrap();
+
+        let mut buf = b"\x1b[?25l\x1b[H".to_vec();
+        buf.extend(editor_rows_to_buf(erows, 100));
+        buf.extend(b"\x1b[1;1H\x1b[?25h");
+
+        // output
+        assert_eq!(String::from_utf8(s.output), String::from_utf8(buf));
+
+        // refresh
+        assert_eq!(s.buf, vec![]);
     }
 }

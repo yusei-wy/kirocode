@@ -9,7 +9,7 @@ pub enum Error {
     ParseIntError(num::ParseIntError),
     InputReadByteError,
     InputNotFoundEscapeError,
-    ScreenGetSizeError,
+    UnknownWindowSize,
 }
 
 impl fmt::Display for Error {
@@ -18,9 +18,10 @@ impl fmt::Display for Error {
         match self {
             IoError(err) => write!(f, "{}", err),
             ParseIntError(err) => write!(f, "{}", err),
+            UnknownWindowSize => write!(f, "Could not detect terminal window size"),
+            // TODO: いらいないかも
             InputReadByteError => write!(f, "input read byte error"),
             InputNotFoundEscapeError => write!(f, "input not found escape error"),
-            ScreenGetSizeError => write!(f, "screen get size error"),
         }
     }
 }

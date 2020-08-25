@@ -1,23 +1,26 @@
-use kirocode::{Editor, Error, Result};
+use kirocode::{Editor, Error, Result, StdinRawMode};
 
 use std::env;
 use std::io::{self, BufWriter};
 
 fn main() {
-    if let Err(err) = edit() {
+    let args: Vec<String> = env::args().collect();
+    let mut filepath: Option<&str> = None;
+    if args.len() >= 2 {
+        filepath = Some(&args[1]);
+    }
+    if let Err(err) = edit(filepath) {
         die(err);
     }
 }
 
-fn edit() -> Result<()> {
+fn edit(filepath: Option<&str>) -> Result<()> {
+    let input = StdinRawMode::new(io::stdin())?.input_keys();
     let output = io::stdout();
     let output = BufWriter::new(output.lock());
-
-    let args: Vec<String> = env::args().collect();
-    if args.len() >= 2 {
-        Editor::open(&args[1], output)?.edit()
-    } else {
-        Editor::new(output)?.edit()
+    match filepath {
+        Some(f) => Editor::open(f, input, output)?.edit(),
+        _ => Editor::new(input, output)?.edit(),
     }
 }
 

@@ -1,28 +1,14 @@
-use crate::error::{Error, Result};
-use crate::input::StdinRawMode;
+use crate::error::Result;
+use crate::input::{InputSeq, KeySeq};
 use crate::screen::Screen;
 
 use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
-#[derive(PartialEq)]
-pub enum Sequence {
-    AllowLeft,
-    AllowRight,
-    AllowUp,
-    AllowDown,
-    Del,
-    Home,
-    End,
-    PageUp,
-    PageDown,
-    Key(u8),
-}
-
-pub struct Editor<W: Write> {
+pub struct Editor<I: Iterator<Item = Result<InputSeq>>, W: Write> {
     screen: Screen<W>,
-    input: StdinRawMode,
+    input: I,
     buf_rows: usize,
     rows: Vec<EditorRow>,
 }
@@ -32,26 +18,12 @@ pub struct EditorRow {
     pub buf: Vec<u8>,
 }
 
-impl<W> Editor<W>
+impl<I, W> Editor<I, W>
 where
+    I: Iterator<Item = Result<InputSeq>>,
     W: Write,
 {
-    pub fn new(output: W) -> Result<Self> {
-        let mut input = StdinRawMode::new()?;
-        let screen = Screen::new(None, &mut input, output)?;
-
-        let editor = Self {
-            screen,
-            input,
-            buf_rows: 0,
-            rows: Vec::new(),
-        };
-
-        Ok(editor)
-    }
-
-    pub fn open(filepath: &str, output: W) -> Result<Self> {
-        let mut input = StdinRawMode::new()?;
+    pub fn open<P: AsRef<Path>>(filepath: P, mut input: I, output: W) -> Result<Self> {
         let screen = Screen::new(None, &mut input, output)?;
 
         let mut editor = Self {
@@ -61,7 +33,7 @@ where
             rows: Vec::new(),
         };
 
-        if let Ok(lines) = Self::read_lines(filepath) {
+        if let Ok(lines) = read_lines(filepath) {
             for line in lines {
                 if let Ok(ip) = line {
                     let buf = ip.into_bytes();
@@ -81,12 +53,17 @@ where
         Ok(editor)
     }
 
-    fn read_lines<P>(filepath: P) -> Result<io::Lines<io::BufReader<File>>>
-    where
-        P: AsRef<Path>,
-    {
-        let file = File::open(filepath)?;
-        Ok(io::BufReader::new(file).lines())
+    pub fn new(mut input: I, output: W) -> Result<Self> {
+        let screen = Screen::new(None, &mut input, output)?;
+
+        let editor = Self {
+            screen,
+            input,
+            buf_rows: 0,
+            rows: Vec::new(),
+        };
+
+        Ok(editor)
     }
 
     fn append_row(&mut self, buf: Vec<u8>, len: usize) {
@@ -99,8 +76,13 @@ where
 
         loop {
             self.screen.refresh(self.buf_rows, &mut self.rows)?;
-            let ok = self.process_keypress()?;
-            if !ok {
+            if let Some(seq) = self.input.next() {
+                let ok = self.process_keypress(seq?)?;
+                if !ok {
+                    self.screen.clear()?;
+                    break;
+                }
+            } else {
                 self.screen.clear()?;
                 break;
             }
@@ -109,107 +91,133 @@ where
         Ok(())
     }
 
-    fn process_keypress(&mut self) -> Result<bool> {
-        let seq = self.read_key()?;
-
+    fn process_keypress(&mut self, seq: InputSeq) -> Result<bool> {
+        use KeySeq::*;
         match seq {
-            Sequence::Key(b) => {
-                if b == ctrl_key('q') {
-                    return Ok(false);
-                }
-            }
-
-            Sequence::Home => {
-                self.screen.set_cx(0);
-            }
-
-            Sequence::End => {
-                self.screen.set_cx(self.screen.cols() - 1);
-            }
-
-            Sequence::PageUp | Sequence::PageDown => {
-                let mut times = self.screen.rows();
-                loop {
-                    times -= 1;
-                    if times == 0 {
-                        break;
-                    }
-                    if seq == Sequence::PageUp {
-                        self.screen.move_cursor(Sequence::AllowUp, self.buf_rows);
-                    } else {
-                        self.screen.move_cursor(Sequence::AllowDown, self.buf_rows);
+            InputSeq {
+                key, ctrl: true, ..
+            } => match key {
+                Key(b'q') => return Ok(false),
+                _ => {}
+            },
+            InputSeq { key, .. } => match key {
+                Home => self.screen.set_cx(0),
+                End => self.screen.set_cx(self.screen.cols() - 1),
+                PageUp | PageDown => {
+                    let mut times = self.screen.rows();
+                    loop {
+                        times -= 1;
+                        if times == 0 {
+                            break;
+                        }
+                        if key == PageUp {
+                            self.screen.move_cursor(Up, self.buf_rows);
+                        } else {
+                            self.screen.move_cursor(Down, self.buf_rows);
+                        }
                     }
                 }
-            }
-
-            Sequence::AllowUp
-            | Sequence::AllowDown
-            | Sequence::AllowRight
-            | Sequence::AllowLeft => self.screen.move_cursor(seq, self.buf_rows),
-
-            Sequence::Del => {}
+                Up | Down | Right | Left => self.screen.move_cursor(key, self.buf_rows),
+                Del => {}
+                _ => {}
+            },
         }
 
         Ok(true)
     }
-
-    fn read_key(&mut self) -> Result<Sequence> {
-        let ob = self.input.read_byte()?;
-        let b = ob.ok_or(Error::InputReadByteError)?;
-        if b != b'\x1b' {
-            return Ok(Sequence::Key(b));
-        }
-
-        let mut seq: Vec<u8> = Vec::with_capacity(3);
-        seq.push(self.input.read_byte()?.ok_or(Error::InputReadByteError)?);
-        seq.push(self.input.read_byte()?.ok_or(Error::InputReadByteError)?);
-
-        if seq[0] == b'[' {
-            if b'0' <= seq[1] && seq[1] <= b'9' {
-                seq.push(self.input.read_byte()?.ok_or(Error::InputReadByteError)?);
-                if seq[2] == b'~' {
-                    match seq[1] {
-                        b'1' | b'7' => return Ok(Sequence::Home),
-                        b'4' | b'8' => return Ok(Sequence::End),
-                        b'3' => return Ok(Sequence::Del),
-                        b'5' => return Ok(Sequence::PageUp),
-                        b'6' => return Ok(Sequence::PageDown),
-                        _ => {}
-                    }
-                }
-            } else {
-                match seq[1] {
-                    b'A' => return Ok(Sequence::AllowUp),
-                    b'B' => return Ok(Sequence::AllowDown),
-                    b'C' => return Ok(Sequence::AllowRight),
-                    b'D' => return Ok(Sequence::AllowLeft),
-                    b'H' => return Ok(Sequence::Home),
-                    b'F' => return Ok(Sequence::End),
-                    _ => {}
-                }
-            }
-        } else if seq[0] == b'O' {
-            match seq[1] {
-                b'H' => return Ok(Sequence::Home),
-                b'F' => return Ok(Sequence::End),
-                _ => {}
-            }
-        }
-
-        Ok(Sequence::Key(b'\x1b'))
-    }
 }
 
-fn ctrl_key(c: char) -> u8 {
-    c as u8 & 0x1f
+fn read_lines<P>(filepath: P) -> Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filepath)?;
+    Ok(io::BufReader::new(file).lines())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use crate::error::Error;
+    use crate::input::{DummyInputSequences, KeySeq};
+    use KeySeq::*;
+
     #[test]
-    fn test_ctrl_key() {
-        assert_eq!(ctrl_key('q'), 17);
+    fn test_read_lines() {
+        let lines = read_lines("");
+        if let Err(err) = lines {
+            match err {
+                Error::IoError(_) => {}
+                _ => unreachable!(),
+            }
+        }
+
+        if let Ok(lines) = read_lines("./test.txt") {
+            let mut cnt = 0;
+            for line in lines {
+                cnt += 1;
+                if let Ok(ip) = line {
+                    assert_eq!(ip, "kirocode test file.");
+                }
+            }
+            assert_eq!(cnt, 1);
+        } else {
+            unreachable!();
+        }
+    }
+
+    #[test]
+    fn test_editor_new() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let e = Editor::new(i, o).unwrap();
+        assert_eq!(e.buf_rows, 0);
+        assert_eq!(e.rows.len(), 0);
+    }
+
+    #[test]
+    fn test_editor_open() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let e = Editor::open("", i, o).unwrap();
+        assert_eq!(e.buf_rows, 1);
+        assert_eq!(e.rows.len(), 0);
+
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let e = Editor::open("./test.txt", i, o).unwrap();
+        assert_eq!(e.buf_rows, 2);
+        assert_eq!(e.rows.len(), 1);
+
+        assert_eq!(e.rows[0].size, 19);
+        assert_eq!(e.rows[0].buf, b"kirocode test file.");
+    }
+
+    #[test]
+    fn test_append_row() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut e = Editor::new(i, o).unwrap();
+
+        e.append_row(b"kirocode".to_vec(), 8);
+        assert_eq!(e.rows.len(), 1);
+        assert_eq!(e.rows[0].size, 8);
+        assert_eq!(e.rows[0].buf, b"kirocode");
+        assert_eq!(e.buf_rows, 1);
+    }
+
+    #[test]
+    fn test_process_keypress() {
+        let i = DummyInputSequences(vec![]);
+        let o: Vec<u8> = vec![];
+        let mut e = Editor::new(i, o).unwrap();
+
+        let ret = e.process_keypress(InputSeq::new(Key(b'a')));
+        assert_eq!(ret.unwrap(), true);
+
+        // quit
+        let ret = e.process_keypress(InputSeq::ctrl(Key(b'q')));
+        assert_eq!(ret.unwrap(), false);
     }
 }
