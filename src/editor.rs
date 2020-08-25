@@ -135,6 +135,7 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
