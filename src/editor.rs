@@ -29,8 +29,8 @@ where
         let mut editor = Self {
             screen,
             input,
-            buf_rows: 1,
-            rows: Vec::new(),
+            buf_rows: 0,
+            rows: vec![],
         };
 
         if let Ok(lines) = read_lines(filepath) {
@@ -60,7 +60,7 @@ where
             screen,
             input,
             buf_rows: 0,
-            rows: Vec::new(),
+            rows: vec![],
         };
 
         Ok(editor)
@@ -219,5 +219,7 @@ mod tests {
         // quit
         let ret = e.process_keypress(InputSeq::ctrl(Key(b'q')));
         assert_eq!(ret.unwrap(), false);
+
+        // TODO: cols(), rows() を使って move_cursor をテスト
     }
 }

@@ -201,7 +201,7 @@ where
         match self.read_byte()? {
             Some(b'[') | Some(b'O') => {}
             Some(b) if b.is_ascii_control() => return Ok(InputSeq::new(Key(0x1b))),
-            Some(b) => {}
+            Some(_b) => {}
             None => return Ok(InputSeq::new(Key(0x1b))),
         };
 

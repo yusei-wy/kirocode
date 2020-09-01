@@ -77,16 +77,16 @@ where
     pub fn refresh(&mut self, num_size: usize, rows: &mut Vec<EditorRow>) -> Result<()> {
         self.scroll();
 
-        self.append_buffers(b"\x1b[?25l", 6);
-        self.append_buffers(b"\x1b[H", 3);
+        self.append_buffers(b"\x1b[?25l");
+        self.append_buffers(b"\x1b[H");
 
         self.draw_rows(num_size, rows);
 
         // cursor
         let buf = format!("\x1b[{};{}H", (self.cy - self.row_off) + 1, self.cx + 1);
-        self.append_buffers(buf.as_bytes(), buf.len());
+        self.append_buffers(buf.as_bytes());
 
-        self.append_buffers(b"\x1b[?25h", 6);
+        self.append_buffers(b"\x1b[?25h");
 
         let b = &self.buf;
         self.output.write(b)?;
@@ -107,47 +107,60 @@ where
                     } else {
                         welcom.len()
                     };
+
                     let padding: i32 = (self.cols - welcom_len) as i32;
                     let mut padding = padding / 2;
                     if padding > 0 {
-                        self.append_buffers(b"~", 1);
+                        self.append_buffers(b"~");
                         padding -= 1;
                     }
+
                     loop {
                         padding -= 1;
                         if padding > 0 {
-                            self.append_buffers(b" ", 1);
+                            self.append_buffers(b" ");
                         } else {
                             break;
                         }
                     }
-                    self.append_buffers(welcom.as_bytes(), welcom_len);
+                    self.append_buffers(welcom.as_bytes());
                 } else {
-                    self.append_buffers(b"~", 1);
+                    self.append_buffers(b"~");
                 }
             } else {
                 if let Some(row) = rows.get(file_row) {
-                    if row.size > self.cols {
-                        self.append_buffers(&row.buf, self.cols);
+                    let len = match row.size.checked_sub(self.cols) {
+                        Some(_) => {
+                            let l = row.size - self.cols;
+                            if l > self.cols {
+                                self.cols
+                            } else {
+                                l
+                            }
+                        }
+                        None => 0,
+                    };
+                    if row.buf.len() > self.col_off {
+                        self.append_buffers(&row.buf[self.col_off..]);
                     } else {
-                        self.append_buffers(&row.buf, row.size);
+                        self.append_buffers(&row.buf[len..]);
                     }
                 }
             }
 
-            self.append_buffers(b"\x1b[K", 3);
+            self.append_buffers(b"\x1b[K");
             if y < self.rows - 1 {
-                self.append_buffers(b"\r\n", 2);
+                self.append_buffers(b"\r\n");
             }
         }
     }
 
-    fn append_buffers(&mut self, buf: &[u8], len: usize) {
-        self.buf.extend(buf[..len].iter());
+    fn append_buffers(&mut self, buf: &[u8]) {
+        self.buf.extend(buf);
     }
 
     fn free_buffers(&mut self) {
-        self.buf = Vec::new();
+        self.buf = vec![];
     }
 
     fn scroll(&mut self) {
@@ -158,6 +171,12 @@ where
         // カーソルが可視ウィンドウの下部を超えているなら、カーソルを画面の下部で固定
         if self.cy >= self.row_off + self.rows {
             self.row_off = self.cy - self.rows + 1;
+        }
+        if self.cx < self.col_off {
+            self.col_off = self.cx;
+        }
+        if self.cx >= self.col_off + self.cols {
+            self.col_off = self.cx - self.cols + 1;
         }
     }
 
@@ -313,8 +332,8 @@ mod tests {
         let input = DummyInputSequences(vec![]);
         let output: Vec<u8> = vec![];
         let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
-        screen.append_buffers(b"abcde", 3);
-        assert_eq!(screen.buf, vec![b'a', b'b', b'c']);
+        screen.append_buffers(b"abcde");
+        assert_eq!(screen.buf, b"abcde".to_vec());
     }
 
     #[test]
@@ -322,8 +341,8 @@ mod tests {
         let input = DummyInputSequences(vec![]);
         let output: Vec<u8> = vec![];
         let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
-        screen.append_buffers(b"abcde", 3);
-        assert_eq!(screen.buf, vec![b'a', b'b', b'c']);
+        screen.append_buffers(b"abcde");
+        assert_eq!(screen.buf, b"abcde".to_vec());
         screen.free_buffers();
         assert_eq!(screen.buf, vec![]);
     }
