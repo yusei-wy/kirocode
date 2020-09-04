@@ -88,10 +88,9 @@ where
 
         self.append_buffers(b"\x1b[?25h");
 
-        let b = &self.buf;
-        self.output.write(b)?;
+        self.output.write(&self.buf)?;
         self.output.flush()?; // 描画後は flush しないとカーソルの位置が上に戻らない
-        self.free_buffers();
+        self.buf = vec![];
 
         Ok(())
     }
@@ -129,9 +128,9 @@ where
                 }
             } else {
                 if let Some(row) = rows.get(file_row) {
-                    let len = match row.size.checked_sub(self.cols) {
+                    let len = match row.size.checked_sub(self.col_off) {
                         Some(_) => {
-                            let l = row.size - self.cols;
+                            let l = row.size - self.col_off;
                             if l > self.cols {
                                 self.cols
                             } else {
@@ -140,10 +139,11 @@ where
                         }
                         None => 0,
                     };
-                    if row.buf.len() > self.col_off {
-                        self.append_buffers(&row.buf[self.col_off..]);
+                    if self.col_off > len {
+                        // TODO: 右側にスクロールすると左側に消えたはずのテキストが再度表示される
+                        self.append_buffers(&row.buf);
                     } else {
-                        self.append_buffers(&row.buf[len..]);
+                        self.append_buffers(&row.buf[self.col_off..len]);
                     }
                 }
             }
@@ -157,10 +157,6 @@ where
 
     fn append_buffers(&mut self, buf: &[u8]) {
         self.buf.extend(buf);
-    }
-
-    fn free_buffers(&mut self) {
-        self.buf = vec![];
     }
 
     fn scroll(&mut self) {
@@ -188,11 +184,7 @@ where
                     self.cx -= 1;
                 }
             }
-            Right => {
-                if self.cx < self.cols {
-                    self.cx += 1
-                }
-            }
+            Right => self.cx += 1,
             Up => {
                 if self.cy > 0 {
                     self.cy -= 1;
@@ -334,17 +326,6 @@ mod tests {
         let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
         screen.append_buffers(b"abcde");
         assert_eq!(screen.buf, b"abcde".to_vec());
-    }
-
-    #[test]
-    fn test_free_buffers() {
-        let input = DummyInputSequences(vec![]);
-        let output: Vec<u8> = vec![];
-        let mut screen = Screen::new(Some((50, 100)), input, output).unwrap();
-        screen.append_buffers(b"abcde");
-        assert_eq!(screen.buf, b"abcde".to_vec());
-        screen.free_buffers();
-        assert_eq!(screen.buf, vec![]);
     }
 
     #[test]
