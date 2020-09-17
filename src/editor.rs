@@ -37,14 +37,7 @@ where
             for line in lines {
                 if let Ok(ip) = line {
                     let buf = ip.into_bytes();
-                    let mut size = buf.len();
-                    loop {
-                        if size > 0 && (buf[size - 1] == b'\n' || buf[size - 1] == b'\r') {
-                            size -= 1;
-                        }
-                        break;
-                    }
-
+                    let size = buf.len();
                     editor.append_row(buf, size);
                 }
             }
